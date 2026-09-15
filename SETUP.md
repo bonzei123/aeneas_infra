@@ -106,14 +106,16 @@ Zwei Achsen, kein Kreuzprodukt `Verein × Rolle`:
 | Gruppe | Achse | Verwendung |
 | --- | --- | --- |
 | `mitgliedschaft:aktiv` | Funktion | beitragsfähiges Mitglied |
-| `rolle:vorstand` | Funktion | Vorstand (des eigenen Vereins) |
+| `rolle:vorstand` | Funktion | Vorstand |
+| `rolle:ap` | Funktion | Ansprechpartner |
+| `rolle:praevb` | Funktion | Präventionsbeauftragte |
+| `rolle:ausgabe` | Funktion | Ausgabe (CAV-Abgabe) |
 | `backoffice` | Funktion | Gesamtverein-Mitarbeiter (Nextcloud-Client später auf diese Gruppe beschränkt) |
-| `amt:ausgabe` | Funktion | Beispiel-Amt; weitere analog `amt:…` |
 | `verein:<slug>` | Organisation | ein Zweigverein = ein Tenant; nicht `:mitglied`/`:vorstand` anhängen |
 
 Bei 180 Zweigvereinen: 180 `verein:*` plus das feste Funktionsset, nicht 360 oder 540. `verein:*` später aus dem CAV-Mandantenstamm, nicht alle per Hand. Schema: Planung `docs/sso-matrix.md`.
 
-**Nur lokal:** eine Testgruppe `verein:demo`. Bereits angelegte `verein:demo:mitglied` / `verein:demo:vorstand` durch `verein:demo` plus `rolle:vorstand` ersetzen.
+**Nur lokal:** eine Testgruppe `verein:demo`. Bereits angelegte `verein:demo:mitglied` / `verein:demo:vorstand` bzw. `amt:*` durch `verein:demo` plus `rolle:*` ersetzen.
 
 ---
 
