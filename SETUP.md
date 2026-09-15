@@ -1,23 +1,23 @@
-# Setup — Schritt für Schritt
+# Setup
 
-Ziel ist der **produktive Release** (Linux-Server, echte Domain, HTTPS, echte Passwörter). Dieselben Keycloak-Schritte gelten dort und auf dem Rechner.
+Ziel: produktives Deployment (Linux, öffentliche Domain, TLS, produktive Secrets). Dieselben Keycloak-Schritte gelten lokal und in Produktion.
 
-Abschnitte und Zeilen mit **Nur lokal** gelten nur zum Üben auf dem Windows-Rechner. Auf dem Produktivserver überspringen.
+Abschnitte und Zeilen mit **Nur lokal** gelten ausschließlich für die lokale Entwicklungsumgebung. In Produktion überspringen.
 
 ---
 
 ## Begriffe
 
-| Wort | Bedeutung |
+| Begriff | Bedeutung |
 | --- | --- |
-| Traefik | Türsteher. Schaut auf den Hostnamen und schickt den Request an den richtigen Container. |
-| Realm | Ein abgeschlossenes Login-Haus. `master` = Hausmeister. `aeneas` = Mitglieder und Apps. |
-| Client | Eine App, die sich bei Keycloak anmelden darf (Portal, CAV, …). |
-| Gruppe | Stempel auf dem Konto (`mitgliedschaft:aktiv`, `verein:…:vorstand`). Apps lesen das. |
+| Traefik | Reverse-Proxy. Routet HTTP anhand des Host-Headers (`Host()`-Regeln) an den jeweiligen Container. |
+| Realm | Isolierte Identity-Domain in Keycloak. `master` = Admin-Realm. `aeneas` = Anwendungs-Realm (Benutzer, Gruppen, OIDC-Clients). |
+| Client | OIDC-/OAuth2-Client (Portal, CAV, …). |
+| Gruppe | Keycloak-Gruppe; Abbildungen in Token bzw. Userinfo (`mitgliedschaft:aktiv`, `verein:…:vorstand`). |
 
-Keycloak hat auf `/` **keine Startseite** (404 ist normal). Immer die Admin-Konsole: `https://id.<DOMAIN>/admin/`
+Keycloak liefert auf `/` keinen Content. Admin-Konsole: `https://id.<DOMAIN>/admin/`
 
-**Nur lokal:** `http://id.aeneas.test/admin/` (kein HTTPS, Domain aus der Hosts-Datei).
+**Nur lokal:** `http://id.aeneas.test/admin/` (HTTP, Name über Hosts-Datei).
 
 ---
 
@@ -26,132 +26,130 @@ Keycloak hat auf `/` **keine Startseite** (404 ist normal). Immer die Admin-Kons
 ### Produktion
 
 1. Linux-Host (Debian oder Ubuntu LTS), Docker Compose, Firewall.
-2. Echte Domain kaufen bzw. nutzen. DNS **A/AAAA** (kein Eintrag in einer Hosts-Datei):
+2. Öffentliche Domain. DNS-Records **A/AAAA** (kein `/etc/hosts`):
 
    | Host | Dienst |
    | --- | --- |
    | `id.<DOMAIN>` | Keycloak |
    | `www.<DOMAIN>` | Portal |
    | `cav.<DOMAIN>` | CAV-Kern |
-   | `traefik.<DOMAIN>` | Traefik-Dashboard — **nicht öffentlich**, nur intern oder VPN |
+   | `traefik.<DOMAIN>` | Traefik-Dashboard — nicht öffentlich, intern oder VPN |
 
-3. In `aeneas_infra`: `.env` aus `.env.example` anlegen. `DOMAIN` auf die echte Domain. **Alle** Passwörter durch starke ersetzen, Datei nicht committen.
-4. Vor dem öffentlichen Go-Live: HTTPS an Traefik (Let’s Encrypt). Die Compose-Datei ist derzeit HTTP-first; TLS gehört in die Produktiv-Compose, nicht als Hosts-Trick.
-5. `docker compose up -d` — warten, bis Postgres **healthy** und Keycloak läuft (erster Start ~1 Minute).
+3. In `aeneas_infra`: `.env` aus `.env.example`. `DOMAIN` auf die öffentliche Domain setzen. Alle Passwörter durch produktive Secrets ersetzen; `.env` nicht committen.
+4. Vor öffentlichem Traffic: TLS an Traefik (Let’s Encrypt). Die aktuelle Compose-Datei ist HTTP-first; TLS gehört in die Produktiv-Konfiguration.
+5. `docker compose up -d`. Warten, bis der Postgres-Healthcheck erfolgreich ist und Keycloak lauscht (erster Start ca. 1 Minute).
 
 ### Nur lokal
 
-Zum Üben **ohne** DNS und Zertifikat:
+Entwicklung ohne öffentliches DNS und ohne Zertifikat:
 
-- Docker Desktop muss laufen. Traefik **v3.6+** (neuere Docker Desktop: mit Traefik 3.3 sind alle Hosts 404).
-- `DOMAIN=aeneas.test` in `.env` lassen. Dummy-Passwörter aus `.env.example` sind nur für den Rechner.
-- Hosts-Datei (Windows, als Administrator) `C:\Windows\System32\drivers\etc\hosts`:
+- Docker Desktop. Traefik **v3.6+** (Docker Engine neuerer Desktop-Versionen: Traefik 3.3 kann die Docker-API nicht lesen, Router aus Labels fehlen, alle Hosts antworten 404).
+- `DOMAIN=aeneas.test` in `.env`. Default-Passwörter aus `.env.example` nur lokal.
+- Windows-Hosts-Datei (Administrator) `C:\Windows\System32\drivers\etc\hosts`:
 
   ```
   127.0.0.1 id.aeneas.test www.aeneas.test cav.aeneas.test traefik.aeneas.test
   ```
 
-- Port 80 muss frei sein. Sonst in `compose.yml` z. B. `"8080:80"` und URLs mit `:8080`.
+- Port 80 muss frei sein. Andernfalls in `compose.yml` z. B. `"8080:80"` und URLs mit `:8080`.
 - Start: `cp .env.example .env` und `docker compose up -d`.
 
 ---
 
-## 1. Master-Admin (immer)
+## 1. Master-Admin
 
-Der User aus `KC_BOOTSTRAP_ADMIN_*` ist nur ein **temporärer** Bootstrap. Sofort einen **richtigen Admin in `master` anlegen** und behalten. Den letzten Master-Admin nicht löschen.
+`KC_BOOTSTRAP_ADMIN_*` erzeugt nur einen temporären Bootstrap-User. Unmittelbar danach einen dauerhaften Admin im Realm `master` anlegen. Den letzten Master-Admin nicht löschen.
 
-1. Admin-Konsole öffnen (`/admin/`).
-2. Mit Bootstrap einloggen.
-3. In `master` einen dauerhaften Admin anlegen, Passwort notieren (Passwortmanager).
-4. Bootstrap nicht als Dauer-Konto behandeln.
+1. Admin-Konsole (`/admin/`).
+2. Login mit Bootstrap-Credentials.
+3. Im Realm `master` einen dauerhaften Admin anlegen; Credentials im Passwortmanager ablegen.
+4. Bootstrap-User nicht als Betriebs-Konto verwenden.
 
-**Nur lokal:** Login `admin` / `changeme-keycloak`, solange `.env` unverändert ist.
+**Nur lokal:** `admin` / `changeme-keycloak`, solange `.env` die Defaults enthält.
 
 ---
 
-## 2. Realm `aeneas` (immer)
+## 2. Realm `aeneas`
 
-Oben links steht **master**. Das ist das Technik-Haus. Mitglieder kommen hier nicht hin — weder lokal noch in Produktion.
+Der aktuelle Realm steht oben links. `master` ist der Admin-Realm. Endbenutzer und Anwendungs-Clients gehören nicht dorthin.
 
-1. Oben links auf **master** klicken (Realm-Auswahl).
+1. Realm-Auswahl oben links → aktuell `master`.
 2. **Create realm**.
-3. **Realm name:** `aeneas` (klein, ohne Leerzeichen — technische ID, in Prod und lokal gleich).
-4. **Enabled** an.
+3. **Realm name:** `aeneas` (lowercase, ohne Leerzeichen; Realm-ID lokal und in Produktion identisch).
+4. **Enabled**.
 5. **Create**.
 
-Oben links muss **aeneas** stehen. Wenn da noch `master` steht, bist du im falschen Haus.
+Die Realm-Auswahl muss **aeneas** zeigen. Steht dort `master`, sind nachfolgende User/Gruppen/Clients im Admin-Realm.
 
 ### Realm-Einstellungen
 
-Links **Realm settings**:
+**Realm settings**:
 
-- **General:** Display name z. B. der Vereinsname.
-- **Login:** User registration **aus** (Mitglieder legt ihr an, nicht das Internet).
+- **General:** Display name (Organisationsname).
+- **Login:** User registration aus (kein Self-Registration).
 - **Localization:** Default locale `de`. Internationalization an, Locale `de`.
 
-**Produktion:** SMTP hinterlegen (Passwort vergessen, Bestätigung). Forgot password erst einschalten, wenn SMTP wirklich zustellt. MFA für Admins, Vorstände, Agenten.
+**Produktion:** SMTP konfigurieren (Password-Reset, E-Mail-Verifikation). Forgot password erst aktivieren, wenn SMTP zustellt. MFA für Admins, Vorstände, Zammad-Agenten.
 
-**Nur lokal:** Forgot password aus lassen. Ohne SMTP bei Test-Usern **Email verified** manuell an, sonst Nerv.
+**Nur lokal:** Forgot password aus. Ohne SMTP bei Test-Usern **Email verified** setzen, sonst bleibt die Verifikation ausstehend.
 
-Themes (Logo/Farben) später, Planung `ci-cd.md`.
+Login-Theme später; Planung `ci-cd.md`.
 
 ---
 
-## 3. Gruppen-Skelett (immer)
+## 3. Gruppen
 
-Links **Groups** → **Create group**. Führend ist Keycloak, nicht Nextcloud oder Matrix. Namen klein, genau so:
+**Groups** → **Create group**. Führendes Verzeichnis ist Keycloak, nicht Nextcloud oder Matrix. Namen lowercase, exakt:
 
-| Gruppe | Wofür |
+| Gruppe | Verwendung |
 | --- | --- |
 | `mitgliedschaft:aktiv` | beitragsfähiges Mitglied |
-| `backoffice` | Gesamtverein-Mitarbeiter (später Nextcloud) |
+| `backoffice` | Gesamtverein-Mitarbeiter (Nextcloud-Client später auf diese Gruppe beschränkt) |
 | `amt:ausgabe` | Beispiel-Amt; weitere Ämter analog `amt:…` |
 
-Ortsvereine nach dem Muster `verein:<slug>:mitglied` und `verein:<slug>:vorstand`. Details: Planung `docs/sso-matrix.md`.
+Zweigvereine: `verein:<slug>:mitglied` und `verein:<slug>:vorstand`. Schema: Planung `docs/sso-matrix.md`.
 
-**Nur lokal:** zum Klicken die Demo-Gruppen `verein:demo:mitglied` und `verein:demo:vorstand`. In Produktion echte Slugs, kein `demo` als Dauerzustand.
+**Nur lokal:** Testgruppen `verein:demo:mitglied` und `verein:demo:vorstand`. In Produktion echte Slugs, `demo` nicht belassen.
 
 ---
 
-## 4. Erster User im Realm `aeneas` (immer)
+## 4. Erster User im Realm `aeneas`
 
-Nicht in `master`. Oben links wirklich **aeneas**.
+Nicht im Realm `master`. Realm-Auswahl: **aeneas**.
 
 1. **Users** → **Create new user**.
-2. Username und echte E-Mail.
+2. Username und E-Mail.
 3. **Create**.
-4. Reiter **Credentials:** Passwort setzen, **Temporary** aus, wenn die Person das Passwort nicht sofort selbst setzen soll.
-5. Reiter **Groups:** die passenden Gruppen (mindestens `mitgliedschaft:aktiv` plus Ortsverein).
+4. **Credentials:** Passwort setzen; **Temporary** aus, wenn kein Zwangswechsel beim ersten Login gewünscht ist.
+5. **Groups:** mindestens `mitgliedschaft:aktiv` plus Ortsverein-Gruppe.
 
-Das ist ein Mitglied, kein Admin. Realms verwalten bleibt der Master-Admin.
+Das Konto ist ein Realm-User, kein Master-Admin. Realm-Verwaltung bleibt beim Master-Admin.
 
-**Nur lokal:** User z. B. `anna`, **Email verified** an, Gruppen `mitgliedschaft:aktiv` und `verein:demo:mitglied`.
+**Nur lokal:** z. B. User `anna`, **Email verified**, Gruppen `mitgliedschaft:aktiv` und `verein:demo:mitglied`.
 
 ---
 
-## 5. Danach (Produktion, nicht überspringen wenn ihr live geht)
+## 5. Nächste Schritte (Produktion)
 
-OIDC-**Clients** für Portal und CAV erst, wenn die Apps Redirect-URL und Secret wirklich nutzen.
+OIDC-Clients für Portal und CAV erst anlegen, wenn Redirect-URIs und Client-Secrets in den Anwendungen konfiguriert sind.
 
 Reihenfolge:
 
-1. Linux, Traefik (HTTPS), Keycloak, Realm, Gruppen ← du bist hier, sobald Schritt 0–3 in Prod stehen
-2. Portal: Login + Linktree
-3. CAV: Mandant aus Token
+1. Linux, Traefik (TLS), Keycloak, Realm, Gruppen
+2. Portal: OIDC-Login, Einstiegsseite
+3. CAV: Mandant und Rolle aus Token
 4. Zammad, Moodle, Matrix, Nextcloud
-5. SMTP, Themes, MFA, Backup nach außen (restic/borg)
-
-Compose Alltag:
+5. SMTP, Themes, MFA, Offsite-Backup (restic/borg)
 
 ```bash
 cd aeneas_infra
 docker compose up -d
 docker compose ps
 docker compose logs -f keycloak
-docker compose down          # stoppen, Daten bleiben
+docker compose down          # stoppt Container, Volumes bleiben
 ```
 
-Portal und CAV, wenn die Geschwister-Repos daneben liegen:
+Portal und CAV (Repositories `aeneas_portal` und `aeneas_cav` eine Verzeichnisebene höher):
 
 ```bash
 docker compose -f compose.yml -f compose.apps.yml up -d --build
@@ -161,11 +159,11 @@ docker compose -f compose.yml -f compose.apps.yml up -d --build
 
 ## Reset
 
-Bootstrap-Admin entsteht **nur** bei leerer Keycloak-Datenbank. Container neu starten reicht nicht.
+Der Bootstrap-Admin wird nur bei leerer Keycloak-Datenbank erzeugt. Ein Container-Restart reicht nicht.
 
-**Produktion:** Datenbank nicht droppen, um einen Admin zu retten. Stattdessen: Postgres-Backup, zweiten Master-Admin vorher anlegen, oder Keycloak-Admin-CLI gegen die bestehende DB. `docker compose down -v` auf dem Live-Server ist Datenverlust.
+**Produktion:** Keycloak-Datenbank nicht droppen, um einen Admin wiederherzustellen. Stattdessen: Postgres-Backup, zweiten Master-Admin vorab anlegen, oder Keycloak-Admin-CLI gegen die bestehende Datenbank. `docker compose down -v` auf dem Produktivsystem löscht Volumes.
 
-**Nur lokal:** Keycloak-DB leeren (Portal-/CAV-DBs bleiben):
+**Nur lokal:** Keycloak-Datenbank neu anlegen (Datenbanken `portal` und `cav` bleiben):
 
 ```bash
 cd aeneas_infra
@@ -175,6 +173,6 @@ docker compose exec -T postgres psql -U aeneas -d postgres -c "CREATE DATABASE k
 docker compose start keycloak
 ```
 
-Warten auf Logzeile `Created temporary admin user with username admin`. Dann `/admin/` → Bootstrap-Login → sofort wieder einen richtigen Master-Admin anlegen.
+Logzeile `Created temporary admin user with username admin` abwarten. `/admin/` → Bootstrap-Login → dauerhaften Master-Admin anlegen.
 
-Kompletter Übungs-Reset (alles weg): `docker compose down -v` und wieder `docker compose up -d`.
+Vollständiger lokaler Reset (alle Volumes): `docker compose down -v`, danach `docker compose up -d`.

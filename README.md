@@ -1,25 +1,23 @@
 # Aeneas Infra
 
-Docker Compose für die Aeneas-Landschaft. Kein Kubernetes.
+Docker Compose für die Aeneas-Dienste. Kein Kubernetes.
 
-Schritt für Schritt (Produktion, lokale Extra-Schritte markiert): [SETUP.md](SETUP.md).
+Ablauf (Produktion; lokale Abweichungen in SETUP markiert): [SETUP.md](SETUP.md).
 
-Erwartete Nachbarn auf der Platte (gleiche Ebene wie dieser Ordner):
+Benötigte Repositories auf derselben Verzeichnisebene:
 
 - `aeneas_portal`
 - `aeneas_cav`
 
-Traefik ist nur der **Reverse-Proxy**: von außen ein Port 80, innen verteilt er nach dem Hostnamen (`id.…`, `www.…`, …) an Keycloak, Portal, CAV. Kein DNS-Anbieter, kein Zertifikat nötig, solange ihr HTTP lokal nutzt.
+Traefik ist der Reverse-Proxy: eingehend Port 80, intern Routing über `Host()`-Regeln (`id.…`, `www.…`, …) zu Keycloak, Portal, CAV. Lokal ohne TLS; öffentliches DNS und Zertifikate sind für Produktion vorgesehen, nicht für `*.aeneas.test`.
 
-## Lokal ohne echte Domain
+## Lokal ohne öffentliche Domain
 
-`DOMAIN=aeneas.test` in `.env` lassen. Docker Desktop muss laufen. In der **Hosts-Datei** (Windows: `C:\Windows\System32\drivers\etc\hosts`, als Admin):
+`DOMAIN=aeneas.test` in `.env`. Docker Desktop muss laufen. Hosts-Datei (Windows: `C:\Windows\System32\drivers\etc\hosts`, Administrator):
 
 ```
 127.0.0.1 id.aeneas.test www.aeneas.test cav.aeneas.test traefik.aeneas.test
 ```
-
-Dann:
 
 ```bash
 cd aeneas_infra
@@ -27,42 +25,47 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Browser: `http://id.aeneas.test` (Keycloak), `http://traefik.aeneas.test` (Dashboard). Portal/CAV wie oben mit `compose.apps.yml`.
+| URL | Dienst |
+| --- | --- |
+| `http://id.aeneas.test/admin/` | Keycloak Admin-Konsole |
+| `http://traefik.aeneas.test` | Traefik-Dashboard |
 
-Port 80 muss frei sein. Wenn etwas anderes ihn blockiert, in `compose.yml` z. B. `"8080:80"` setzen und `http://id.aeneas.test:8080` aufrufen.
+Portal/CAV: Overlay `compose.apps.yml`.
 
-## Start (später mit richtiger Domain)
+Port 80 muss frei sein. Sonst in `compose.yml` z. B. `"8080:80"` und URLs mit `:8080`.
+
+Lokal Traefik **v3.6+**: neuere Docker Desktop spricht eine Docker-API, mit der Traefik 3.3 die Container-Labels nicht liest — dann fehlen die Router, alle Hosts antworten 404.
+
+## Start (Produktion, öffentliche Domain)
 
 ```bash
 cp .env.example .env
-# optional: Passwörter in .env ändern — ohne .env nutzt Compose lokale Defaults
+# DOMAIN und Secrets in .env setzen; ohne .env interpoliert Compose die Defaults aus compose.yml
 
 docker compose up -d
 ```
 
-Damit laufen Traefik, PostgreSQL, Redis und Keycloak.
+Dienste: Traefik, PostgreSQL, Redis, Keycloak.
 
-Portal und CAV (baut die Geschwister-Repos):
+Portal und CAV (Build der Nachbar-Repositories):
 
 ```bash
 docker compose -f compose.yml -f compose.apps.yml up -d --build
 ```
 
-Hosts in `/etc/hosts` oder DNS, je nach `DOMAIN` in `.env`:
+Routing über DNS bzw. lokal `/etc/hosts`, abhängig von `DOMAIN` in `.env`:
 
 | Host | Dienst |
 | --- | --- |
 | `id.DOMAIN` | Keycloak |
-| `www.DOMAIN` | Portal (nur mit compose.apps.yml) |
-| `cav.DOMAIN` | CAV-Kern (nur mit compose.apps.yml) |
+| `www.DOMAIN` | Portal (nur mit `compose.apps.yml`) |
+| `cav.DOMAIN` | CAV-Kern (nur mit `compose.apps.yml`) |
 | `traefik.DOMAIN` | Traefik-Dashboard |
 
-Keycloak hat auf `/` keine Seite (404 ist normal). Admin-Konsole: `http://id.aeneas.test/admin/`
+Keycloak liefert auf `/` keinen Content. Admin-Konsole: `https://id.DOMAIN/admin/` (lokal HTTP: `http://id.aeneas.test/admin/`).
 
-Lokal braucht Traefik **v3.6+**: neuere Docker Desktop spricht eine Docker-API, mit der Traefik 3.3 die Labels nicht mehr liest — dann ist alles 404.
-
-Zammad, Moodle, Matrix, Nextcloud kommen später als weitere Compose-Dateien in diesem Repo — nicht als eigene GitHub-Repos. Offizielle Images, eigene `.env`.
+Zammad, Moodle, Matrix, Nextcloud: spätere Compose-Dateien in diesem Repository, keine eigenen GitHub-Repos. Offizielle Images, eigene `.env`.
 
 ## Postgres
 
-Ein Server, mehrere Datenbanken (siehe `postgres/init/01-databases.sql`): `keycloak`, `portal`, `cav`.
+Eine Instanz, getrennte Datenbanken (siehe `postgres/init/01-databases.sql`): `keycloak`, `portal`, `cav`.
