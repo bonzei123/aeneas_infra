@@ -9,14 +9,14 @@ services:
     environment:
       CAV_URL: http://cav:8000
       KEYCLOAK_URL: http://keycloak:8080
-      KEYCLOAK_PUBLIC_URL: http://id.${DOMAIN}
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/portal
+      KEYCLOAK_PUBLIC_URL: http://id.${DOMAIN:-aeneas.test}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aeneas}:${POSTGRES_PASSWORD:-changeme-postgres}@postgres:5432/portal
     depends_on:
       postgres:
         condition: service_healthy
     labels:
       - traefik.enable=true
-      - traefik.http.routers.portal.rule=Host(`www.${DOMAIN}`)
+      - traefik.http.routers.portal.rule=Host(`www.${DOMAIN:-aeneas.test}`)
       - traefik.http.services.portal.loadbalancer.server.port=8000
     networks:
       - default
@@ -26,13 +26,13 @@ services:
       context: ../aeneas_cav
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cav
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aeneas}:${POSTGRES_PASSWORD:-changeme-postgres}@postgres:5432/cav
     depends_on:
       postgres:
         condition: service_healthy
     labels:
       - traefik.enable=true
-      - traefik.http.routers.cav.rule=Host(`cav.${DOMAIN}`)
+      - traefik.http.routers.cav.rule=Host(`cav.${DOMAIN:-aeneas.test}`)
       - traefik.http.services.cav.loadbalancer.server.port=8000
     networks:
       - default
