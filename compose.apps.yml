@@ -1,0 +1,38 @@
+# Baut Portal und CAV aus den Geschwister-Repos.
+# Aufruf: docker compose -f compose.yml -f compose.apps.yml up -d --build
+
+services:
+  portal:
+    build:
+      context: ../aeneas_portal
+    restart: unless-stopped
+    environment:
+      CAV_URL: http://cav:8000
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: http://id.${DOMAIN}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/portal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.portal.rule=Host(`www.${DOMAIN}`)
+      - traefik.http.services.portal.loadbalancer.server.port=8000
+    networks:
+      - default
+
+  cav:
+    build:
+      context: ../aeneas_cav
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/cav
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.cav.rule=Host(`cav.${DOMAIN}`)
+      - traefik.http.services.cav.loadbalancer.server.port=8000
+    networks:
+      - default
