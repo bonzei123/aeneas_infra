@@ -99,17 +99,21 @@ Login-Theme später; Planung `ci-cd.md`.
 
 ## 3. Gruppen
 
-**Groups** → **Create group**. Führendes Verzeichnis ist Keycloak, nicht Nextcloud oder Matrix. Namen lowercase, exakt:
+**Groups** → **Create group**. Führendes Verzeichnis ist Keycloak, nicht Nextcloud oder Matrix. Namen lowercase, exakt.
 
-| Gruppe | Verwendung |
-| --- | --- |
-| `mitgliedschaft:aktiv` | beitragsfähiges Mitglied |
-| `backoffice` | Gesamtverein-Mitarbeiter (Nextcloud-Client später auf diese Gruppe beschränkt) |
-| `amt:ausgabe` | Beispiel-Amt; weitere Ämter analog `amt:…` |
+Zwei Achsen, kein Kreuzprodukt `Verein × Rolle`:
 
-Zweigvereine: `verein:<slug>:mitglied` und `verein:<slug>:vorstand`. Schema: Planung `docs/sso-matrix.md`.
+| Gruppe | Achse | Verwendung |
+| --- | --- | --- |
+| `mitgliedschaft:aktiv` | Funktion | beitragsfähiges Mitglied |
+| `rolle:vorstand` | Funktion | Vorstand (des eigenen Vereins) |
+| `backoffice` | Funktion | Gesamtverein-Mitarbeiter (Nextcloud-Client später auf diese Gruppe beschränkt) |
+| `amt:ausgabe` | Funktion | Beispiel-Amt; weitere analog `amt:…` |
+| `verein:<slug>` | Organisation | ein Zweigverein = ein Tenant; nicht `:mitglied`/`:vorstand` anhängen |
 
-**Nur lokal:** Testgruppen `verein:demo:mitglied` und `verein:demo:vorstand`. In Produktion echte Slugs, `demo` nicht belassen.
+Bei 180 Zweigvereinen: 180 `verein:*` plus das feste Funktionsset, nicht 360 oder 540. `verein:*` später aus dem CAV-Mandantenstamm, nicht alle per Hand. Schema: Planung `docs/sso-matrix.md`.
+
+**Nur lokal:** eine Testgruppe `verein:demo`. Bereits angelegte `verein:demo:mitglied` / `verein:demo:vorstand` durch `verein:demo` plus `rolle:vorstand` ersetzen.
 
 ---
 
@@ -121,11 +125,11 @@ Nicht im Realm `master`. Realm-Auswahl: **aeneas**.
 2. Username und E-Mail.
 3. **Create**.
 4. **Credentials:** Passwort setzen; **Temporary** aus, wenn kein Zwangswechsel beim ersten Login gewünscht ist.
-5. **Groups:** mindestens `mitgliedschaft:aktiv` plus Ortsverein-Gruppe.
+5. **Groups:** mindestens `mitgliedschaft:aktiv` plus genau eine `verein:<slug>`-Gruppe. Vorstand zusätzlich `rolle:vorstand`.
 
 Das Konto ist ein Realm-User, kein Master-Admin. Realm-Verwaltung bleibt beim Master-Admin.
 
-**Nur lokal:** z. B. User `anna`, **Email verified**, Gruppen `mitgliedschaft:aktiv` und `verein:demo:mitglied`.
+**Nur lokal:** z. B. User `anna`, **Email verified**, Gruppen `mitgliedschaft:aktiv` und `verein:demo`.
 
 ---
 
