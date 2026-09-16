@@ -16,7 +16,7 @@ Traefik ist der Reverse-Proxy: eingehend Port 80, intern Routing über `Host()`-
 `DOMAIN=aeneas.test` in `.env`. Docker Desktop muss laufen. Hosts-Datei (Windows: `C:\Windows\System32\drivers\etc\hosts`, Administrator):
 
 ```
-127.0.0.1 id.aeneas.test www.aeneas.test cav.aeneas.test traefik.aeneas.test
+127.0.0.1 id.aeneas.test www.aeneas.test cav.aeneas.test help.aeneas.test traefik.aeneas.test
 ```
 
 ```bash
@@ -28,9 +28,10 @@ docker compose up -d
 | URL | Dienst |
 | --- | --- |
 | `http://id.aeneas.test/admin/` | Keycloak Admin-Konsole |
+| `http://help.aeneas.test` | Zammad (Overlay `compose.zammad.yml`) |
 | `http://traefik.aeneas.test` | Traefik-Dashboard |
 
-Portal/CAV: Overlay `compose.apps.yml`.
+Portal/CAV: Overlay `compose.apps.yml`. Zammad: Overlay `compose.zammad.yml`.
 
 Port 80 muss frei sein. Sonst in `compose.yml` z. B. `"8080:80"` und URLs mit `:8080`.
 
@@ -60,11 +61,12 @@ Routing über DNS bzw. lokal `/etc/hosts`, abhängig von `DOMAIN` in `.env`:
 | `id.DOMAIN` | Keycloak |
 | `www.DOMAIN` | Portal (nur mit `compose.apps.yml`) |
 | `cav.DOMAIN` | CAV-Kern (nur mit `compose.apps.yml`) |
+| `help.DOMAIN` | Zammad (nur mit `compose.zammad.yml`) |
 | `traefik.DOMAIN` | Traefik-Dashboard |
 
 Keycloak liefert auf `/` keinen Content. Admin-Konsole: `https://id.DOMAIN/admin/` (lokal HTTP: `http://id.aeneas.test/admin/`).
 
-Zammad, Moodle, Matrix, Nextcloud: spätere Compose-Dateien in diesem Repository, keine eigenen GitHub-Repos. Offizielle Images, eigene `.env`.
+Zammad: Overlay `compose.zammad.yml` (offizielle Images, eigener Postgres). Moodle, Matrix, Nextcloud: weitere Compose-Dateien in diesem Repository, keine eigenen GitHub-Repos.
 
 ## Postgres
 

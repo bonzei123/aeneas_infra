@@ -33,6 +33,7 @@ Keycloak liefert auf `/` keinen Content. Admin-Konsole: `https://id.<DOMAIN>/adm
    | `id.<DOMAIN>` | Keycloak |
    | `www.<DOMAIN>` | Portal |
    | `cav.<DOMAIN>` | CAV-Kern |
+   | `help.<DOMAIN>` | Zammad |
    | `traefik.<DOMAIN>` | Traefik-Dashboard — nicht öffentlich, intern oder VPN |
 
 3. In `aeneas_infra`: `.env` aus `.env.example`. `DOMAIN` auf die öffentliche Domain setzen. Alle Passwörter durch produktive Secrets ersetzen; `.env` nicht committen.
@@ -48,7 +49,7 @@ Entwicklung ohne öffentliches DNS und ohne Zertifikat:
 - Windows-Hosts-Datei (Administrator) `C:\Windows\System32\drivers\etc\hosts`:
 
   ```
-  127.0.0.1 id.aeneas.test www.aeneas.test cav.aeneas.test traefik.aeneas.test
+  127.0.0.1 id.aeneas.test www.aeneas.test cav.aeneas.test help.aeneas.test traefik.aeneas.test
   ```
 
 - Port 80 muss frei sein. Andernfalls in `compose.yml` z. B. `"8080:80"` und URLs mit `:8080`.
@@ -149,9 +150,31 @@ Browser: `http://www.aeneas.test` → **Anmelden** → User aus Realm `aeneas` (
 
 Token-Exchange geht intern an `http://keycloak:8080`, der Browser nur an `id.<DOMAIN>`.
 
-## 6. Nächste Schritte (Produktion)
+## 6. Zammad
 
-CAV-OIDC analog, sobald Redirect-URI und Secret in `aeneas_cav` stehen. Danach Zammad, Moodle, Matrix, Nextcloud; SMTP, Themes, MFA, Offsite-Backup.
+Eigenes Overlay, offizielle Images. Eigenes Postgres (Rolle `zammad` ≠ Superuser); nicht die Infra-Variable `POSTGRES_USER`.
+
+**Nur lokal:** `help.aeneas.test` in die Hosts-Datei (siehe Abschnitt 0). Elasticsearch braucht `vm.max_map_count=262144` (Docker Desktop: in der Linux-VM / WSL).
+
+```bash
+docker compose -f compose.yml -f compose.zammad.yml up -d
+```
+
+Erststart dauert mehrere Minuten (Images, `zammad-init`, Rails-Healthcheck). Danach `http://help.aeneas.test` — Setup-Wizard, **lokaler Zammad-Admin** (nicht der Keycloak-Master-Admin).
+
+OIDC danach in Zammad (Admin → Settings → Security → Third-party → OpenID Connect) und Keycloak-Client `zammad` im Realm `aeneas`:
+
+| Feld | Wert (lokal) |
+| --- | --- |
+| Valid redirect URIs | `http://help.aeneas.test/auth/openid_connect/callback` |
+| Web origins | `http://help.aeneas.test` |
+| Groups-Mapper | wie Portal, Claim `groups`, Full group path aus |
+
+Mitglieder ohne `rolle:vorstand` / `rolle:ap` / `rolle:praevb` bleiben Zammad-Kunden. Agenten erst nach Mapping der Amtsgruppen. SMTP für Ticket-Mail ist Produktion bzw. Test-SMTP, nicht dieser Schritt.
+
+## 7. Nächste Schritte (Produktion)
+
+CAV-OIDC analog. Moodle, Matrix, Nextcloud; SMTP, Themes, MFA, Offsite-Backup.
 ---
 
 ## Reset
