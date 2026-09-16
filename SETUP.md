@@ -105,7 +105,9 @@ Zwei Achsen, kein Kreuzprodukt `Verein × Rolle`:
 
 | Gruppe | Achse | Verwendung |
 | --- | --- | --- |
-| `mitgliedschaft:aktiv` | Funktion | beitragsfähiges Mitglied |
+| `mitgliedschaft:pending` | Status | Antrag, Login ohne Abgabe |
+| `mitgliedschaft:aktiv` | Status | beitragsfähiges Mitglied |
+| `mitgliedschaft:beendet` | Status | ex-Mitglied, Belege/Tickets |
 | `rolle:vorstand` | Funktion | Vorstand |
 | `rolle:ap` | Funktion | Ansprechpartner |
 | `rolle:praevb` | Funktion | Präventionsbeauftragte |
@@ -127,7 +129,7 @@ Nicht im Realm `master`. Realm-Auswahl: **aeneas**.
 2. Username und E-Mail.
 3. **Create**.
 4. **Credentials:** Passwort setzen; **Temporary** aus, wenn kein Zwangswechsel beim ersten Login gewünscht ist.
-5. **Groups:** mindestens `mitgliedschaft:aktiv` plus genau eine `verein:<slug>`-Gruppe. Vorstand zusätzlich `rolle:vorstand`.
+5. **Groups:** genau eine `mitgliedschaft:*` (`pending` / `aktiv` / `beendet`) plus genau eine `verein:<slug>`-Gruppe. Vorstand zusätzlich `rolle:vorstand`.
 
 Das Konto ist ein Realm-User, kein Master-Admin. Realm-Verwaltung bleibt beim Master-Admin.
 
@@ -135,32 +137,21 @@ Das Konto ist ein Realm-User, kein Master-Admin. Realm-Verwaltung bleibt beim Ma
 
 ---
 
-## 5. Nächste Schritte (Produktion)
+## 5. Portal-OIDC
 
-OIDC-Clients für Portal und CAV erst anlegen, wenn Redirect-URIs und Client-Secrets in den Anwendungen konfiguriert sind.
-
-Reihenfolge:
-
-1. Linux, Traefik (TLS), Keycloak, Realm, Gruppen
-2. Portal: OIDC-Login, Einstiegsseite
-3. CAV: Mandant und Rolle aus Token
-4. Zammad, Moodle, Matrix, Nextcloud
-5. SMTP, Themes, MFA, Offsite-Backup (restic/borg)
-
-```bash
-cd aeneas_infra
-docker compose up -d
-docker compose ps
-docker compose logs -f keycloak
-docker compose down          # stoppt Container, Volumes bleiben
-```
-
-Portal und CAV (Repositories `aeneas_portal` und `aeneas_cav` eine Verzeichnisebene höher):
+Voraussetzung: Client `portal` im Realm `aeneas`, Redirect `http://www.<DOMAIN>/auth/callback`, Group-Membership-Mapper Claim `groups` (Full group path aus). Secret in `.env` als `PORTAL_OIDC_CLIENT_SECRET`.
 
 ```bash
 docker compose -f compose.yml -f compose.apps.yml up -d --build
 ```
 
+Browser: `http://www.aeneas.test` → **Anmelden** → User aus Realm `aeneas` (nicht Master-Admin). Nach Login müssen die Keycloak-Gruppen unter der Einstiegsseite stehen.
+
+Token-Exchange geht intern an `http://keycloak:8080`, der Browser nur an `id.<DOMAIN>`.
+
+## 6. Nächste Schritte (Produktion)
+
+CAV-OIDC analog, sobald Redirect-URI und Secret in `aeneas_cav` stehen. Danach Zammad, Moodle, Matrix, Nextcloud; SMTP, Themes, MFA, Offsite-Backup.
 ---
 
 ## Reset
