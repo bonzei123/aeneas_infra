@@ -30,9 +30,13 @@ x-shared:
       RAILS_TRUSTED_PROXIES: '["127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12"]'
       BACKUP_DIR: /var/tmp/zammad
       BACKUP_ON_START: "false"
+    extra_hosts:
+      - "id.${DOMAIN:-aeneas.test}:host-gateway"
     volumes:
       - zammad_backup:/var/tmp/zammad:ro
       - zammad_storage:/opt/zammad/storage
+      # Lokal: SWD defaultet Discovery auf HTTPS:443. Nur wirksam bei ZAMMAD_HTTP_TYPE=http.
+      - ./zammad/initializers/swd_http_oidc.rb:/opt/zammad/config/initializers/swd_http_oidc.rb:ro
     depends_on:
       zammad-memcached:
         condition: service_healthy

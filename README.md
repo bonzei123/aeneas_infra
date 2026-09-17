@@ -66,7 +66,7 @@ Routing über DNS bzw. lokal `/etc/hosts`, abhängig von `DOMAIN` in `.env`:
 
 Keycloak liefert auf `/` keinen Content. Admin-Konsole: `https://id.DOMAIN/admin/` (lokal HTTP: `http://id.aeneas.test/admin/`).
 
-Zammad: Overlay `compose.zammad.yml` (offizielle Images, eigener Postgres). Moodle, Matrix, Nextcloud: weitere Compose-Dateien in diesem Repository, keine eigenen GitHub-Repos.
+Zammad: Overlay `compose.zammad.yml` (offizielle Images, eigener Postgres). Frappe Learning, Matrix, Nextcloud: weitere Compose-Dateien in diesem Repository, keine eigenen GitHub-Repos.
 
 ## Postgres
 

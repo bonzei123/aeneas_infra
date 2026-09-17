@@ -62,7 +62,7 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: ${POSTGRES_USER:-aeneas}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-changeme-postgres}
-      KC_HOSTNAME: id.${DOMAIN:-aeneas.test}
+      KC_HOSTNAME: ${KC_HOSTNAME:-http://id.aeneas.test}
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded

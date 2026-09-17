@@ -102,7 +102,7 @@ Login-Theme später; Planung `ci-cd.md`.
 
 **Groups** → **Create group**. Führendes Verzeichnis ist Keycloak, nicht Nextcloud oder Matrix. Namen lowercase, exakt.
 
-Zwei Achsen, kein Kreuzprodukt `Verein × Rolle`:
+Vier Achsen, kein Kreuzprodukt `Verein × Rolle`:
 
 | Gruppe | Achse | Verwendung |
 | --- | --- | --- |
@@ -113,10 +113,15 @@ Zwei Achsen, kein Kreuzprodukt `Verein × Rolle`:
 | `rolle:ap` | Funktion | Ansprechpartner |
 | `rolle:praevb` | Funktion | Präventionsbeauftragte |
 | `rolle:ausgabe` | Funktion | Ausgabe (CAV-Abgabe) |
+| `rolle:anbau` | Funktion | Anbauteam |
 | `backoffice` | Funktion | Gesamtverein-Mitarbeiter (Nextcloud-Client später auf diese Gruppe beschränkt) |
 | `verein:<slug>` | Organisation | ein Zweigverein = ein Tenant; nicht `:mitglied`/`:vorstand` anhängen |
+| `schulung:onboarding` | Nachweis | CAV nach LMS-Abschluss, nicht per Hand |
+| `schulung:praevention` | Nachweis | Prävention / Jahreskurs |
+| `schulung:chat` | Nachweis | Voraussetzung Matrix |
+| `schulung:ausgabe` | Nachweis | zusätzlich zu `rolle:ausgabe` |
 
-Bei 180 Zweigvereinen: 180 `verein:*` plus das feste Funktionsset, nicht 360 oder 540. `verein:*` später aus dem CAV-Mandantenstamm, nicht alle per Hand. Schema: Planung `docs/sso-matrix.md`.
+Bei 180 Zweigvereinen: 180 `verein:*` plus Status-, Funktions- und Schulungsset, nicht 180×Rollen. `verein:*` später aus dem CAV-Mandantenstamm, nicht alle per Hand. `schulung:*` nur der CAV nach Kursabschluss. Schema: Planung `docs/sso-matrix.md` und `docs/schulungen.md`.
 
 **Nur lokal:** eine Testgruppe `verein:demo`. Bereits angelegte `verein:demo:mitglied` / `verein:demo:vorstand` bzw. `amt:*` durch `verein:demo` plus `rolle:*` ersetzen.
 
@@ -162,19 +167,54 @@ docker compose -f compose.yml -f compose.zammad.yml up -d
 
 Erststart dauert mehrere Minuten (Images, `zammad-init`, Rails-Healthcheck). Danach `http://help.aeneas.test` — Setup-Wizard, **lokaler Zammad-Admin** (nicht der Keycloak-Master-Admin).
 
-OIDC danach in Zammad (Admin → Settings → Security → Third-party → OpenID Connect) und Keycloak-Client `zammad` im Realm `aeneas`:
+OIDC nach dem Wizard. Zammad holt die Discovery-URL vom Issuer; der Rails-Container löst `id.<DOMAIN>` über `extra_hosts`/`host-gateway` auf.
+
+Offizielle Zammad-Doku verlangt HTTPS zwischen Zammad und dem OP. **Nur lokal:** HTTP testen. Produktion nur mit TLS.
+
+### Keycloak-Client `zammad` (Realm `aeneas`)
+
+1. **Clients** → **Create client**, OpenID Connect, Client ID `zammad`.
+2. **Client authentication:** Off (public Client).
+3. Nur **Standard flow**.
+4. Login settings:
 
 | Feld | Wert (lokal) |
 | --- | --- |
 | Valid redirect URIs | `http://help.aeneas.test/auth/openid_connect/callback` |
-| Web origins | `http://help.aeneas.test` |
-| Groups-Mapper | wie Portal, Claim `groups`, Full group path aus |
+| Valid post logout redirect URIs | `http://help.aeneas.test/*` |
+| Web origins | `+` |
 
-Mitglieder ohne `rolle:vorstand` / `rolle:ap` / `rolle:praevb` bleiben Zammad-Kunden. Agenten erst nach Mapping der Amtsgruppen. SMTP für Ticket-Mail ist Produktion bzw. Test-SMTP, nicht dieser Schritt.
+5. **Advanced:** PKCE code challenge method **S256**.
+6. Dedicated Mapper **Group Membership**, Claim `groups`, Full group path aus; ID token, access token, userinfo an. Introspection aus.
+7. Backchannel-Logout lokal weglassen (Keycloak erreicht `help.aeneas.test` sonst nicht). Produktion: `https://help.<DOMAIN>/auth/openid_connect/backchannel_logout`.
+
+### Zammad (als Zammad-Admin)
+
+**Admin → Settings → Security → Third-party Applications → Authentication via OpenID Connect**
+
+| Feld | Wert (lokal) |
+| --- | --- |
+| Display name | Keycloak |
+| Identifier | `zammad` |
+| Issuer | `http://id.aeneas.test/realms/aeneas` |
+
+`KC_HOSTNAME` muss dieselbe Schema-URL sein (`http://id.aeneas.test`). Ohne `http://` liefert die Discovery `https://…:443` — lokal Connection refused.
+
+Zammad selbst defaultet OIDC-Discovery trotzdem auf HTTPS (`SWD.url_builder = URI::HTTPS`). Overlay mountet `zammad/initializers/swd_http_oidc.rb`, solange `ZAMMAD_HTTP_TYPE=http`. Ohne den Initializer: `Connection refused … port 443` nach dem OIDC-Klick.
+
+Speichern. **Automatic account link on initial logon:** yes (sonst zweites Konto neben dem Zammad-Admin).
+
+Mitglieder-Login: **Settings → Security → Base** — Password Login aus, Lost Password aus, User creation / „Als neuer Kunde registrieren“ aus. Dann nur noch der OpenID-Button. Zammad hat **keinen** Auto-Redirect auf OIDC (POST/CSRF). Nach Portal-SSO ist Keycloak schon eingeloggt — ein Klick auf den Button, kein Passwort.
+
+Zammad-Admin (Inselkonto): Password Login aus blendet das Formular. Auf der Login-Seite Link **Request the password login here** / Einmal-Login als Admin. Nicht denselben User wie Keycloak `anna` verwenden.
+
+Test mit `anna` (Realm `aeneas`). Zammad legt den User als **Kunde** an. Agenten später per Zammad-Rolle.
+
+SMTP für Ticket-Mail ist Produktion bzw. Test-SMTP, nicht dieser Schritt.
 
 ## 7. Nächste Schritte (Produktion)
 
-CAV-OIDC analog. Moodle, Matrix, Nextcloud; SMTP, Themes, MFA, Offsite-Backup.
+CAV-OIDC analog. Frappe Learning (nicht Moodle), Matrix, Nextcloud; SMTP, Themes, MFA, Offsite-Backup. Aufnahmeformular im Portal; Chat erst nach `schulung:chat`.
 ---
 
 ## Reset
