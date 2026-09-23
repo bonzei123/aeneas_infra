@@ -9,7 +9,7 @@ Benötigte Repositories auf derselben Verzeichnisebene:
 - `aeneas_portal`
 - `aeneas_cav`
 
-Traefik ist der Reverse-Proxy: eingehend Port 80, intern Routing über `Host()`-Regeln (`id.…`, `www.…`, …) zu Keycloak, Portal, CAV. Lokal ohne TLS; öffentliches DNS und Zertifikate sind für Produktion vorgesehen, nicht für `*.aeneas.test`.
+Traefik routet intern über `Host()` (`id.…`, `www.…`, …). Lokal bindet er Port 80. Läuft auf dem Host schon Caddy (z. B. Stoat), Caddy behält 80/443; Traefik nur `127.0.0.1:8080` (`TRAEFIK_PORTS`, `caddy/aeneas.caddy`).
 
 ## Lokal ohne öffentliche Domain
 
@@ -33,7 +33,7 @@ docker compose up -d
 
 Portal/CAV: Overlay `compose.apps.yml`. Zammad: Overlay `compose.zammad.yml`.
 
-Port 80 muss frei sein. Sonst in `compose.yml` z. B. `"8080:80"` und URLs mit `:8080`.
+Port 80 muss frei sein, sofern Traefik selbst eingehend lauscht. Hinter Caddy: `TRAEFIK_PORTS=127.0.0.1:8080:80`.
 
 Lokal Traefik **v3.6+**: neuere Docker Desktop spricht eine Docker-API, mit der Traefik 3.3 die Container-Labels nicht liest — dann fehlen die Router, alle Hosts antworten 404.
 
@@ -66,7 +66,7 @@ Routing über DNS bzw. lokal `/etc/hosts`, abhängig von `DOMAIN` in `.env`:
 
 Keycloak liefert auf `/` keinen Content. Admin-Konsole: `https://id.DOMAIN/admin/` (lokal HTTP: `http://id.aeneas.test/admin/`).
 
-Zammad: Overlay `compose.zammad.yml` (offizielle Images, eigener Postgres). Frappe Learning, Matrix, Nextcloud: weitere Compose-Dateien in diesem Repository, keine eigenen GitHub-Repos.
+Zammad: Overlay `compose.zammad.yml` (offizielle Images, eigener Postgres). Frappe, Matrix, Nextcloud: `compose.frappe.yml`, `compose.matrix.yml`, `compose.nextcloud.yml` — liegen bereit, nicht ohne die `.md` starten.
 
 ## Postgres
 

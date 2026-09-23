@@ -1,0 +1,29 @@
+# MariaDB + Redis für Frappe Learning. Kein LMS — siehe frappe.md
+# Nicht als fertigen Stack starten.
+
+services:
+  frappe-mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${FRAPPE_MARIADB_ROOT:-changeme-frappe}
+      MYSQL_DATABASE: frappe
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - frappe_mariadb:/var/lib/mysql
+    networks:
+      - default
+
+  frappe-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - frappe_redis:/data
+    networks:
+      - default
+
+volumes:
+  frappe_mariadb:
+  frappe_redis:

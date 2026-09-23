@@ -1,0 +1,40 @@
+# Nextcloud hinter Traefik. Noch nicht starten — siehe nextcloud.md
+# Aufruf später: docker compose -f compose.yml -f compose.nextcloud.yml up -d
+
+services:
+  nextcloud-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_POSTGRES_PASS:-changeme-nextcloud}
+      POSTGRES_DB: nextcloud
+    volumes:
+      - nextcloud_db:/var/lib/postgresql/data
+    networks:
+      - default
+
+  nextcloud:
+    image: nextcloud:31-apache
+    restart: unless-stopped
+    depends_on:
+      - nextcloud-db
+    environment:
+      POSTGRES_HOST: nextcloud-db
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NEXTCLOUD_POSTGRES_PASS:-changeme-nextcloud}
+      POSTGRES_DB: nextcloud
+      OVERWRITEHOST: cloud.${DOMAIN:-aeneas.test}
+      OVERWRITEPROTOCOL: ${PUBLIC_SCHEME:-http}
+    volumes:
+      - nextcloud_html:/var/www/html
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.nextcloud.rule=Host(`cloud.${DOMAIN:-aeneas.test}`)
+      - traefik.http.services.nextcloud.loadbalancer.server.port=80
+    networks:
+      - default
+
+volumes:
+  nextcloud_db:
+  nextcloud_html:

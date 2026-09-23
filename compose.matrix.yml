@@ -1,0 +1,28 @@
+# Synapse + Element hinter Traefik. Noch nicht starten — siehe matrix.md
+# Aufruf später: docker compose -f compose.yml -f compose.matrix.yml up -d
+
+services:
+  synapse:
+    image: matrixdotorg/synapse:v1.128.0
+    restart: unless-stopped
+    volumes:
+      - ./matrix/data:/data
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.synapse.rule=Host(`chat.${DOMAIN:-aeneas.test}`) && PathPrefix(`/_matrix`)
+      - traefik.http.routers.synapse.priority=20
+      - traefik.http.services.synapse.loadbalancer.server.port=8008
+    networks:
+      - default
+
+  element:
+    image: vectorim/element-web:v1.11.96
+    restart: unless-stopped
+    volumes:
+      - ./matrix/element.json:/app/config.json:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.element.rule=Host(`chat.${DOMAIN:-aeneas.test}`)
+      - traefik.http.services.element.loadbalancer.server.port=80
+    networks:
+      - default

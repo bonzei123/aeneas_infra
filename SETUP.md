@@ -37,7 +37,16 @@ Keycloak liefert auf `/` keinen Content. Admin-Konsole: `https://id.<DOMAIN>/adm
    | `traefik.<DOMAIN>` | Traefik-Dashboard — nicht öffentlich, intern oder VPN |
 
 3. In `aeneas_infra`: `.env` aus `.env.example`. `DOMAIN` auf die öffentliche Domain setzen. Alle Passwörter durch produktive Secrets ersetzen; `.env` nicht committen.
-4. Vor öffentlichem Traffic: TLS an Traefik (Let’s Encrypt). Die aktuelle Compose-Datei ist HTTP-first; TLS gehört in die Produktiv-Konfiguration.
+4. **Bestehendes Caddy (z. B. Stoat) bleibt auf 80/443.** Traefik nicht auf 80 binden:
+
+   ```
+   TRAEFIK_PORTS=127.0.0.1:8080:80
+   PUBLIC_SCHEME=https
+   KC_HOSTNAME=https://id.<DOMAIN>
+   PORTAL_PUBLIC_URL=https://www.<DOMAIN>
+   ```
+
+   Caddy-Site-Blöcke auf dem Host (TLS bleibt bei Caddy). Traefik nur intern HTTP, Host-Header durchreichen.
 5. `docker compose up -d`. Warten, bis der Postgres-Healthcheck erfolgreich ist und Keycloak lauscht (erster Start ca. 1 Minute).
 
 ### Nur lokal
@@ -52,7 +61,7 @@ Entwicklung ohne öffentliches DNS und ohne Zertifikat:
   127.0.0.1 id.aeneas.test www.aeneas.test cav.aeneas.test help.aeneas.test traefik.aeneas.test
   ```
 
-- Port 80 muss frei sein. Andernfalls in `compose.yml` z. B. `"8080:80"` und URLs mit `:8080`.
+- Port 80 muss frei sein, **außer** ein anderer Proxy (Caddy) bleibt davor — dann `TRAEFIK_PORTS=127.0.0.1:8080:80`.
 - Start: `cp .env.example .env` und `docker compose up -d`.
 
 ---
@@ -210,11 +219,11 @@ Zammad-Admin (Inselkonto): Password Login aus blendet das Formular. Auf der Logi
 
 Test mit `anna` (Realm `aeneas`). Zammad legt den User als **Kunde** an. Agenten später per Zammad-Rolle.
 
-SMTP für Ticket-Mail ist Produktion bzw. Test-SMTP, nicht dieser Schritt.
+SMTP/IMAP: [MAIL.md](MAIL.md). Overlay-Dateien (noch nicht starten): [frappe.md](frappe.md), [matrix.md](matrix.md), [nextcloud.md](nextcloud.md).
 
 ## 7. Nächste Schritte (Produktion)
 
-CAV-OIDC analog. Frappe Learning (nicht Moodle), Matrix, Nextcloud; SMTP, Themes, MFA, Offsite-Backup. Aufnahmeformular im Portal; Chat erst nach `schulung:chat`.
+CAV-OIDC analog. Frappe Learning (nicht Moodle), Matrix, Nextcloud; Themes, MFA, Offsite-Backup. Aufnahmeformular im Portal; Chat erst nach `schulung:chat`.
 ---
 
 ## Reset

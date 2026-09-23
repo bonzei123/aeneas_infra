@@ -9,9 +9,11 @@ services:
     environment:
       CAV_URL: http://cav:8000
       KEYCLOAK_URL: http://keycloak:8080
-      KEYCLOAK_PUBLIC_URL: http://id.${DOMAIN:-aeneas.test}
+      KEYCLOAK_PUBLIC_URL: ${KC_HOSTNAME:-http://id.aeneas.test}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-aeneas}
-      PORTAL_PUBLIC_URL: http://www.${DOMAIN:-aeneas.test}
+      DOMAIN: ${DOMAIN:-aeneas.test}
+      PUBLIC_SCHEME: ${PUBLIC_SCHEME:-http}
+      PORTAL_PUBLIC_URL: ${PORTAL_PUBLIC_URL:-http://www.aeneas.test}
       PORTAL_OIDC_CLIENT_ID: ${PORTAL_OIDC_CLIENT_ID:-portal}
       PORTAL_OIDC_CLIENT_SECRET: ${PORTAL_OIDC_CLIENT_SECRET:-}
       SESSION_SECRET: ${SESSION_SECRET:-changeme-portal-session}
@@ -21,7 +23,7 @@ services:
         condition: service_healthy
     labels:
       - traefik.enable=true
-      - traefik.http.routers.portal.rule=Host(`www.${DOMAIN:-aeneas.test}`)
+      - traefik.http.routers.portal.rule=Host(`www.${DOMAIN:-aeneas.test}`) || Host(`portal.${DOMAIN:-aeneas.test}`)
       - traefik.http.services.portal.loadbalancer.server.port=8000
     networks:
       - default
