@@ -1,5 +1,6 @@
-# Synapse + Element hinter Traefik. Noch nicht starten — siehe matrix.md
-# Aufruf später: docker compose -f compose.yml -f compose.matrix.yml up -d
+# Synapse + Element hinter Traefik.
+# docker compose -f compose.yml -f compose.apps.yml -f compose.zammad.yml -f compose.matrix.yml up -d
+# Vorher: A-Record chat.${DOMAIN}, einmal `generate` (matrix.md).
 
 services:
   synapse:
@@ -9,8 +10,10 @@ services:
       - ./matrix/data:/data
     labels:
       - traefik.enable=true
-      - traefik.http.routers.synapse.rule=Host(`chat.${DOMAIN:-aeneas.test}`) && PathPrefix(`/_matrix`)
+      - traefik.http.routers.synapse.rule=Host(`chat.${DOMAIN:-aeneas-solutions.de}`) && (PathPrefix(`/_matrix`) || PathPrefix(`/_synapse`) || PathPrefix(`/.well-known/matrix`))
       - traefik.http.routers.synapse.priority=20
+      - traefik.http.routers.synapse.entrypoints=websecure
+      - traefik.http.routers.synapse.tls.certresolver=le
       - traefik.http.services.synapse.loadbalancer.server.port=8008
     networks:
       - default
@@ -22,7 +25,10 @@ services:
       - ./matrix/element.json:/app/config.json:ro
     labels:
       - traefik.enable=true
-      - traefik.http.routers.element.rule=Host(`chat.${DOMAIN:-aeneas.test}`)
+      - traefik.http.routers.element.rule=Host(`chat.${DOMAIN:-aeneas-solutions.de}`)
+      - traefik.http.routers.element.priority=10
+      - traefik.http.routers.element.entrypoints=websecure
+      - traefik.http.routers.element.tls.certresolver=le
       - traefik.http.services.element.loadbalancer.server.port=80
     networks:
       - default

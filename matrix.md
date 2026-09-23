@@ -1,48 +1,55 @@
-# Matrix / Element — Overlay, noch nicht starten
+# Matrix / Element
 
-Host: `chat.${DOMAIN}`. Federation aus. Join nur mit `mitgliedschaft:aktiv` **und** `schulung:chat` — das macht später der Gruppenabgleich, nicht Synapse von allein.
+Host `chat.${DOMAIN}`. Matrix-IDs: `@name:chat.aeneas-solutions.de`. Federation aus. OIDC/Keycloak und Gruppenabgleich (`schulung:chat`) kommen danach, nicht in diesem Start.
 
-OIDC gegen Keycloak (Client `matrix` oder MAS) ist **nicht** in dieser Datei verdrahtet.
+## 0. DNS
 
-## Dateien
+A-Record `chat.aeneas-solutions.de` → Server-IPv4 (`46.225.123.251`). Check: `dig +short chat.aeneas-solutions.de`.
 
-- `compose.matrix.yml`
-- `matrix/element.json` — Homeserver-URL, beim Start `DOMAIN` anpassen
-
-## Bevor `up`
-
-1. A-Record `chat.${DOMAIN}`.
-2. Synapse-Config erzeugen (einmal, legt Signing-Keys an):
+## 1. Config erzeugen (einmal)
 
 ```bash
+cd ~/aeneas/aeneas_infra
 mkdir -p matrix/data
-docker run --rm -e SYNAPSE_SERVER_NAME=chat.aeneas-solutions.de \
+chown -R 991:991 matrix/data
+docker run --rm \
+  -e SYNAPSE_SERVER_NAME=chat.aeneas-solutions.de \
   -e SYNAPSE_REPORT_STATS=no \
   -v "$(pwd)/matrix/data:/data" \
   matrixdotorg/synapse:v1.128.0 generate
 ```
 
-3. In `homeserver.yaml`: `public_baseurl`, Listener 8008, Federation `false` / `allow_public_rooms_over_federation: false`.
-4. Postgres: eigene DB `synapse` (nicht den Infra-Cluster zwingen — Overlay hat sqlite nur zum ersten Test; Produktion = Postgres).
-5. Demo mit Let’s Encrypt: an den Traefik-Routern
+UID 991 = Synapse im Image.
 
+## 2. homeserver.yaml
+
+In `matrix/data/homeserver.yaml` setzen bzw. ergänzen:
+
+```yaml
+public_baseurl: https://chat.aeneas-solutions.de/
+serve_server_wellknown: true
+enable_registration: false
+allow_public_rooms_over_federation: false
+federation_domain_whitelist: []
 ```
-- traefik.http.routers.element.entrypoints=websecure
-- traefik.http.routers.element.tls.certresolver=le
-```
 
-dasselbe für `synapse` (Client-API `chat.${DOMAIN}`).
+Listener bleibt HTTP `:8008` (TLS macht Traefik). Sqlite in `/data` reicht für die Demo.
 
-## Start (später)
+## 3. Start
 
 ```bash
-docker compose -f compose.yml -f compose.matrix.yml up -d
+docker compose -f compose.yml -f compose.apps.yml -f compose.zammad.yml -f compose.matrix.yml up -d
 ```
 
-Element: `https://chat.${DOMAIN}`. Synapse well-known später, sonst Handy-Clients raten falsch.
+Element: `https://chat.aeneas-solutions.de`
+
+Ersten User (ohne offene Registration):
+
+```bash
+docker compose -f compose.yml -f compose.matrix.yml exec synapse \
+  register_new_matrix_user -c /data/homeserver.yaml http://localhost:8008
+```
 
 ## Danach
 
-- Keycloak-Client, OIDC oder MAS
-- Gruppenabgleich (kleiner Worker, eigenes Code, kein fünftes Repo)
-- Kein öffentliches Raumverzeichnis
+Keycloak-OIDC oder MAS, Registration zu, Join nur mit `schulung:chat`. Learn (Frappe) erst wenn Chat steht.

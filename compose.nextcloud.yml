@@ -24,13 +24,13 @@ services:
       POSTGRES_USER: nextcloud
       POSTGRES_PASSWORD: ${NEXTCLOUD_POSTGRES_PASS:-changeme-nextcloud}
       POSTGRES_DB: nextcloud
-      OVERWRITEHOST: cloud.${DOMAIN:-aeneas.test}
+      OVERWRITEHOST: cloud.${DOMAIN:-aeneas-solutions.de}
       OVERWRITEPROTOCOL: ${PUBLIC_SCHEME:-http}
     volumes:
       - nextcloud_html:/var/www/html
     labels:
       - traefik.enable=true
-      - traefik.http.routers.nextcloud.rule=Host(`cloud.${DOMAIN:-aeneas.test}`)
+      - traefik.http.routers.nextcloud.rule=Host(`cloud.${DOMAIN:-aeneas-solutions.de}`)
       - traefik.http.services.nextcloud.loadbalancer.server.port=80
     networks:
       - default
