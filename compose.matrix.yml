@@ -18,6 +18,15 @@ services:
     networks:
       - default
 
+  coturn:
+    # Host-Netz: TURN muss UDP-Relay auf der öffentlichen IP binden.
+    image: coturn/coturn:4.6.3-r3
+    restart: unless-stopped
+    network_mode: host
+    entrypoint: ["turnserver", "-c", "/etc/coturn/turnserver.conf"]
+    volumes:
+      - ./matrix/turnserver.conf:/etc/coturn/turnserver.conf:ro
+
   element:
     image: vectorim/element-web:v1.11.96
     restart: unless-stopped
@@ -30,5 +39,54 @@ services:
       - traefik.http.routers.element.entrypoints=websecure
       - traefik.http.routers.element.tls.certresolver=le
       - traefik.http.services.element.loadbalancer.server.port=80
+    networks:
+      - default
+
+  matrix-sync:
+    build:
+      context: ./matrix
+      dockerfile: Dockerfile.sync
+    restart: unless-stopped
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-aeneas}
+      KEYCLOAK_SYNC_CLIENT_ID: ${KEYCLOAK_SYNC_CLIENT_ID:-matrix-sync}
+      KEYCLOAK_SYNC_CLIENT_SECRET: ${KEYCLOAK_SYNC_CLIENT_SECRET:-}
+      MATRIX_HOMESERVER: http://synapse:8008
+      MATRIX_SERVER_NAME: chat.${DOMAIN:-aeneas-solutions.de}
+      MATRIX_SYNC_USER: ${MATRIX_SYNC_USER:-matrix-sync}
+      MATRIX_SYNC_PASSWORD: ${MATRIX_SYNC_PASSWORD:-}
+      INTERVAL: "60"
+    volumes:
+      - ./matrix/groups.yml:/app/groups.yml:ro
+      - ./matrix/sync.py:/app/sync.py:ro
+    depends_on:
+      - synapse
+    networks:
+      - default
+
+  matrix-admin:
+    build:
+      context: ./matrix
+      dockerfile: Dockerfile.sync
+    command: ["python", "-u", "/app/admin.py"]
+    restart: unless-stopped
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-aeneas}
+      KEYCLOAK_SYNC_CLIENT_ID: ${KEYCLOAK_SYNC_CLIENT_ID:-matrix-sync}
+      KEYCLOAK_SYNC_CLIENT_SECRET: ${KEYCLOAK_SYNC_CLIENT_SECRET:-}
+      MATRIX_HOMESERVER: http://synapse:8008
+      MATRIX_SERVER_NAME: chat.${DOMAIN:-aeneas-solutions.de}
+      MATRIX_SYNC_USER: ${MATRIX_SYNC_USER:-matrix-sync}
+      MATRIX_SYNC_PASSWORD: ${MATRIX_SYNC_PASSWORD:-}
+      MATRIX_ADMIN_USER: ${MATRIX_ADMIN_USER:-admin}
+      MATRIX_ADMIN_PASSWORD: ${MATRIX_ADMIN_PASSWORD:-}
+    volumes:
+      - ./matrix/groups.yml:/app/groups.yml:ro
+      - ./matrix/sync.py:/app/sync.py:ro
+      - ./matrix/admin.py:/app/admin.py:ro
+    depends_on:
+      - synapse
     networks:
       - default

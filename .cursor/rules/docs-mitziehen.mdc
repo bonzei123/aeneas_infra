@@ -1,0 +1,14 @@
+---
+description: READMEs mitziehen; Stack von Anfang an richtig dokumentieren, keine Einmal-Fix-Skripte
+alwaysApply: true
+---
+
+# Doku mit dem Code
+
+Nach jeder nachträglichen Anpassung (Compose, Keycloak, Zammad, Portal, Matrix, Env) dieselbe Sache in die Anleitung schreiben, **bevor** der Turn fertig ist.
+
+- Weg: `SETUP.md`; Details `matrix.md`, `MAIL.md`; Portal `aeneas_portal/README.md`
+- Ton: so, als würde man es beim ersten Setup genau so machen — nicht „auf dem Server nachziehen“
+- Pitch in `aeneas/README.md` nur, wenn sich das Zielbild ändert
+
+Nicht anlegen, nicht committen, nicht in Docs verweisen: Einmal-Skripte (`_enable_*.py`, `_fix_*.rb`, Rails-Konsolen-Patches). Stattdessen UI-Klickweg, Config-Datei, Compose-Overlay oder ein **dauerhaft gemounteter** Initializer.

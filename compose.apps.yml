@@ -17,6 +17,16 @@ services:
       PORTAL_OIDC_CLIENT_ID: ${PORTAL_OIDC_CLIENT_ID:-portal}
       PORTAL_OIDC_CLIENT_SECRET: ${PORTAL_OIDC_CLIENT_SECRET:-}
       SESSION_SECRET: ${SESSION_SECRET:-changeme-portal-session}
+      MATRIX_ADMIN_URL: http://matrix-admin:8090
+      MATRIX_ADMIN_USER: ${MATRIX_ADMIN_USER:-admin}
+      MATRIX_ADMIN_PASSWORD: ${MATRIX_ADMIN_PASSWORD:-}
+      ZAMMAD_URL: http://zammad-nginx:8080
+      ZAMMAD_API_TOKEN: ${ZAMMAD_API_TOKEN:-}
+      ZAMMAD_TICKET_GROUP: ${ZAMMAD_TICKET_GROUP:-Users}
+      ZAMMAD_TICKET_CUSTOMER: ${ZAMMAD_TICKET_CUSTOMER:-help@aeneas-solutions.de}
+      ZAMMAD_WEBHOOK_TOKEN: ${ZAMMAD_WEBHOOK_TOKEN:-}
+      KEYCLOAK_SYNC_CLIENT_ID: ${KEYCLOAK_SYNC_CLIENT_ID:-matrix-sync}
+      KEYCLOAK_SYNC_CLIENT_SECRET: ${KEYCLOAK_SYNC_CLIENT_SECRET:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-aeneas}:${POSTGRES_PASSWORD:-changeme-postgres}@postgres:5432/portal
     depends_on:
       postgres:

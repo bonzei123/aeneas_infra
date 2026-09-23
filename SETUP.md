@@ -1,8 +1,40 @@
 # Setup
 
-Ziel: produktives Deployment (Linux, öffentliche Domain, TLS, produktive Secrets). Dieselben Keycloak-Schritte gelten lokal und in Produktion.
+Weg von einem leeren Linux-Host zum laufenden Stack. Dieselbe Reihenfolge gilt für eine neue Domain. Nachträgliche Änderungen gehören in diese Datei (bzw. `matrix.md` / `MAIL.md`), nicht in Einmal-Skripte.
 
-Abschnitte und Zeilen mit **Nur lokal** gelten ausschließlich für die lokale Entwicklungsumgebung. In Produktion überspringen.
+Abschnitte **Nur lokal** überspringst du in Produktion.
+
+Planung (warum, nicht Klickweg): `aeneas` → `docs/`. Mail: [MAIL.md](MAIL.md). Matrix-Details: [matrix.md](matrix.md). Portal-Code: `aeneas_portal/README.md`.
+
+---
+
+## Endziel (was „fertig“ hier heißt)
+
+Ein Keycloak-Konto im Realm `aeneas`. Das Portal ist der Einstieg. Aufnahme ohne Login: Formular → internes Zammad-Ticket → Amt setzt Verein + „Konto anlegen“ + Tag `freigabe` → Portal legt den Keycloak-User an und schickt die Passwort-Mail. Chat nur nach Gruppenabgleich, niemand ohne Gruppe in einem verwalteten Raum. 1:1-Anrufe in Element über TURN, kein extra Jitsi-Login. Zammad-Agentenrechte kommen aus Keycloak-Gruppen, nicht per Hand in der Zammad-UI.
+
+Noch nicht in diesem Weg: Frappe Learning, Nextcloud, CAV-Fachlogik. Overlays liegen bereit, Start nur mit deren `.md`.
+
+```
+Linux + DNS
+  → Traefik + Postgres + Keycloak
+  → Gruppen + Operator-User + Mail
+  → OIDC-Clients
+  → Portal
+  → Zammad (Queues, OIDC, Aufnahme-Webhook)
+  → Matrix (OIDC, Worker, TURN)
+```
+
+Produktion, alle laufenden Overlays:
+
+```bash
+cd aeneas_infra
+docker compose \
+  -f compose.yml -f compose.tls.yml \
+  -f compose.apps.yml -f compose.zammad.yml -f compose.matrix.yml \
+  up -d --build
+```
+
+`--remove-orphans` nicht verwenden, wenn Dateien in dem Aufruf fehlen — sonst stoppt Compose die weggelassenen Container.
 
 ---
 
@@ -10,229 +42,303 @@ Abschnitte und Zeilen mit **Nur lokal** gelten ausschließlich für die lokale E
 
 | Begriff | Bedeutung |
 | --- | --- |
-| Traefik | Reverse-Proxy. Routet HTTP anhand des Host-Headers (`Host()`-Regeln) an den jeweiligen Container. |
-| Realm | Isolierte Identity-Domain in Keycloak. `master` = Admin-Realm. `aeneas` = Anwendungs-Realm (Benutzer, Gruppen, OIDC-Clients). |
-| Client | OIDC-/OAuth2-Client (Portal, CAV, …). |
-| Gruppe | Keycloak-Gruppe; Abbildungen in Token bzw. Userinfo (`mitgliedschaft:aktiv`, `verein:…:vorstand`). |
+| Traefik | Reverse-Proxy. Routet HTTP anhand des Host-Headers. TLS: Overlay `compose.tls.yml`. |
+| Realm | Isolierte Identity-Domain. `master` = Admin. `aeneas` = Benutzer, Gruppen, Clients. |
+| Client | OIDC-App (portal, zammad, matrix, matrix-sync). |
+| Gruppe | Keycloak-Gruppe im Token-Claim `groups`. Führendes Verzeichnis, nicht Zammad/Matrix. |
 
-Keycloak liefert auf `/` keinen Content. Admin-Konsole: `https://id.<DOMAIN>/admin/`
+Keycloak auf `/` ist leer.
 
-**Nur lokal:** `http://id.aeneas.test/admin/` (HTTP, Name über Hosts-Datei).
+- Realm **master**: `https://id.<DOMAIN>/admin/`
+- Realm **aeneas**: `https://id.<DOMAIN>/admin/aeneas/console/`
+
+`/admin/` ohne Realm ist die Master-Konsole. Gruppen aus `aeneas` gelten dort nicht.
+
+**Nur lokal:** `http://id.aeneas.test/admin/`
 
 ---
 
-## 0. Server und Domain
+## 0. Server, Domain, `.env`
 
 ### Produktion
 
-1. Linux-Host (Debian oder Ubuntu LTS), Docker Compose, Firewall.
-2. Öffentliche Domain. DNS-Records **A/AAAA** (kein `/etc/hosts`):
+1. Debian/Ubuntu LTS, Docker Compose, Firewall. Repos `aeneas_infra`, `aeneas_portal`, `aeneas_cav` nebeneinander.
+2. A-Records (kein `/etc/hosts`):
 
    | Host | Dienst |
    | --- | --- |
    | `id.<DOMAIN>` | Keycloak |
-   | `www.<DOMAIN>` | Portal |
-   | `cav.<DOMAIN>` | CAV-Kern |
+   | `portal.<DOMAIN>` und `www.<DOMAIN>` | Portal |
+   | `cav.<DOMAIN>` | CAV (Stub) |
    | `help.<DOMAIN>` | Zammad |
-   | `traefik.<DOMAIN>` | Traefik-Dashboard — nicht öffentlich, intern oder VPN |
+   | `chat.<DOMAIN>` | Synapse + Element |
+   | `learn.<DOMAIN>` | Frappe, erst mit [frappe.md](frappe.md) |
+   | `cloud.<DOMAIN>` | Nextcloud, erst mit [nextcloud.md](nextcloud.md) |
+   | `traefik.<DOMAIN>` | Dashboard — nicht öffentlich |
 
-3. In `aeneas_infra`: `.env` aus `.env.example`. `DOMAIN` auf die öffentliche Domain setzen. Alle Passwörter durch produktive Secrets ersetzen; `.env` nicht committen.
-4. **Bestehendes Caddy (z. B. Stoat) bleibt auf 80/443.** Traefik nicht auf 80 binden:
+3. `.env` aus `.env.example`. `DOMAIN`, `ACME_EMAIL`, `PUBLIC_SCHEME=https`, `KC_HOSTNAME=https://id.<DOMAIN>`, `PORTAL_PUBLIC_URL=https://portal.<DOMAIN>`. Alle Passwörter neu. `.env` nicht committen.
+4. Traefik auf **80 und 443**, Let’s Encrypt HTTP-01: Overlay `compose.tls.yml`. `TRAEFIK_PORTS` nicht setzen.
+5. Host-Firewall und ggf. Cloud-Firewall (Hetzner): `22`, `80`, `443`. TURN später in [matrix.md](matrix.md) (`3478`, UDP-Relay).
+6. Hetzner sperrt SMTP **25**. Keycloak/Zammad senden über mailbox.org **465/587**, siehe [MAIL.md](MAIL.md).
+7. Hinter einem **bestehenden** Caddy (Port 80 schon belegt) statt Traefik-TLS: `TRAEFIK_PORTS=127.0.0.1:8080:80`, ohne `compose.tls.yml`, Caddy terminiert TLS. Das ist die Ausnahme, nicht der Normalweg.
 
-   ```
-   TRAEFIK_PORTS=127.0.0.1:8080:80
-   PUBLIC_SCHEME=https
-   KC_HOSTNAME=https://id.<DOMAIN>
-   PORTAL_PUBLIC_URL=https://www.<DOMAIN>
-   ```
+```bash
+docker compose -f compose.yml -f compose.tls.yml up -d
+```
 
-   Caddy-Site-Blöcke auf dem Host (TLS bleibt bei Caddy). Traefik nur intern HTTP, Host-Header durchreichen.
-5. `docker compose up -d`. Warten, bis der Postgres-Healthcheck erfolgreich ist und Keycloak lauscht (erster Start ca. 1 Minute).
+Warten, bis Postgres healthy ist und Keycloak lauscht (erster Start etwa eine Minute).
 
 ### Nur lokal
 
-Entwicklung ohne öffentliches DNS und ohne Zertifikat:
-
-- Docker Desktop. Traefik **v3.6+** (Docker Engine neuerer Desktop-Versionen: Traefik 3.3 kann die Docker-API nicht lesen, Router aus Labels fehlen, alle Hosts antworten 404).
-- `DOMAIN=aeneas.test` in `.env`. Default-Passwörter aus `.env.example` nur lokal.
-- Windows-Hosts-Datei (Administrator) `C:\Windows\System32\drivers\etc\hosts`:
-
-  ```
-  127.0.0.1 id.aeneas.test www.aeneas.test cav.aeneas.test help.aeneas.test traefik.aeneas.test
-  ```
-
-- Port 80 muss frei sein, **außer** ein anderer Proxy (Caddy) bleibt davor — dann `TRAEFIK_PORTS=127.0.0.1:8080:80`.
-- Start: `cp .env.example .env` und `docker compose up -d`.
+- Docker Desktop. Traefik **v3.6+**.
+- `DOMAIN=aeneas.test`, `PUBLIC_SCHEME=http`, `KC_HOSTNAME=http://id.aeneas.test`. Kein `compose.tls.yml`.
+- Hosts-Datei: `id`, `www`, `portal`, `cav`, `help`, `chat`, `traefik` → `127.0.0.1`.
+- Overlays in Git erwarten `websecure` (Produktion). Lokal den Kern ohne Apps/Zammad/Matrix testen, oder Hosts + öffentliche Domain nutzen.
 
 ---
 
 ## 1. Master-Admin
 
-`KC_BOOTSTRAP_ADMIN_*` erzeugt nur einen temporären Bootstrap-User. Unmittelbar danach einen dauerhaften Admin im Realm `master` anlegen. Den letzten Master-Admin nicht löschen.
+`KC_BOOTSTRAP_ADMIN_*` ist nur der erste Start. Danach einen dauerhaften Admin im Realm `master` anlegen. Den letzten Master-Admin nicht löschen.
 
-1. Admin-Konsole (`/admin/`).
-2. Login mit Bootstrap-Credentials.
-3. Im Realm `master` einen dauerhaften Admin anlegen; Credentials im Passwortmanager ablegen.
-4. Bootstrap-User nicht als Betriebs-Konto verwenden.
+1. `https://id.<DOMAIN>/admin/`
+2. Login Bootstrap.
+3. Im Realm `master` dauerhaften Admin anlegen, Passwortmanager.
+4. Bootstrap nicht als Betriebskonto.
 
-**Nur lokal:** `admin` / `changeme-keycloak`, solange `.env` die Defaults enthält.
+**Nur lokal:** `admin` / `changeme-keycloak`, solange `.env` die Defaults hat.
 
 ---
 
 ## 2. Realm `aeneas`
 
-Der aktuelle Realm steht oben links. `master` ist der Admin-Realm. Endbenutzer und Anwendungs-Clients gehören nicht dorthin.
+Oben links steht der aktuelle Realm. `master` ist falsch für User, Gruppen, Clients.
 
-1. Realm-Auswahl oben links → aktuell `master`.
-2. **Create realm**.
-3. **Realm name:** `aeneas` (lowercase, ohne Leerzeichen; Realm-ID lokal und in Produktion identisch).
-4. **Enabled**.
-5. **Create**.
-
-Die Realm-Auswahl muss **aeneas** zeigen. Steht dort `master`, sind nachfolgende User/Gruppen/Clients im Admin-Realm.
-
-### Realm-Einstellungen
-
-**Realm settings**:
-
-- **General:** Display name (Organisationsname).
-- **Login:** User registration aus (kein Self-Registration).
-- **Localization:** Default locale `de`. Internationalization an, Locale `de`.
-
-**Produktion:** SMTP konfigurieren (Password-Reset, E-Mail-Verifikation). Forgot password erst aktivieren, wenn SMTP zustellt. MFA für Admins, Vorstände, Zammad-Agenten.
-
-**Nur lokal:** Forgot password aus. Ohne SMTP bei Test-Usern **Email verified** setzen, sonst bleibt die Verifikation ausstehend.
-
-Login-Theme später; Planung `ci-cd.md`.
+1. **Create realm**, Name `aeneas`, Enabled, Create.
+2. **Realm settings → Login:** User registration aus.
+3. **Localization:** Default `de`.
+4. SMTP (Abschnitt 5) bevor Forgot-Password oder `UPDATE_PASSWORD`-Mails.
 
 ---
 
 ## 3. Gruppen
 
-**Groups** → **Create group**. Führendes Verzeichnis ist Keycloak, nicht Nextcloud oder Matrix. Namen lowercase, exakt.
+**Groups → Create group.** Namen lowercase, exakt. Kein Kreuzprodukt `Verein × Rolle`.
 
-Vier Achsen, kein Kreuzprodukt `Verein × Rolle`:
+Vier Fach-Achsen (Planung `docs/sso-matrix.md`) plus Technik:
 
-| Gruppe | Achse | Verwendung |
+| Gruppe | Achse | Wirkung |
 | --- | --- | --- |
-| `mitgliedschaft:pending` | Status | Antrag, Login ohne Abgabe |
-| `mitgliedschaft:aktiv` | Status | beitragsfähiges Mitglied |
-| `mitgliedschaft:beendet` | Status | ex-Mitglied, Belege/Tickets |
-| `rolle:vorstand` | Funktion | Vorstand |
-| `rolle:ap` | Funktion | Ansprechpartner |
-| `rolle:praevb` | Funktion | Präventionsbeauftragte |
-| `rolle:ausgabe` | Funktion | Ausgabe (CAV-Abgabe) |
-| `rolle:anbau` | Funktion | Anbauteam |
-| `backoffice` | Funktion | Gesamtverein-Mitarbeiter (Nextcloud-Client später auf diese Gruppe beschränkt) |
-| `verein:<slug>` | Organisation | ein Zweigverein = ein Tenant; nicht `:mitglied`/`:vorstand` anhängen |
-| `schulung:onboarding` | Nachweis | CAV nach LMS-Abschluss, nicht per Hand |
-| `schulung:praevention` | Nachweis | Prävention / Jahreskurs |
-| `schulung:chat` | Nachweis | Voraussetzung Matrix |
+| `mitgliedschaft:pending` | Status | geplant für Antrag; Aufnahme-Hook legt aktuell `aktiv` an |
+| `mitgliedschaft:aktiv` | Status | Mitglied; Matrix-Gate in `groups.yml` |
+| `mitgliedschaft:beendet` | Status | ex-Mitglied |
+| `rolle:vorstand` | Amt | Vorstand; Matrix Vorstandsräume |
+| `rolle:ap` | Amt | Ansprechpartner |
+| `rolle:praevb` | Amt | Prävention |
+| `rolle:ausgabe` | Dienst | Abgabe |
+| `rolle:anbau` | Dienst | Anbau |
+| `backoffice` | Dienst | Gesamtverein; Portal-Kachel Cloud später |
+| `verein:<slug>` | Tenant | ein Verein; Starter: `demo`, `wanne-eickel`, `worms` |
+| `schulung:onboarding` | Nachweis | später CAV |
+| `schulung:praevention` | Nachweis | später CAV |
+| `schulung:chat` | Nachweis | Matrix-Räume `aeneas` / `allgemein` / `hilfe` |
 | `schulung:ausgabe` | Nachweis | zusätzlich zu `rolle:ausgabe` |
+| `admin:keycloak` | Technik | Admin-Konsole Realm `aeneas` (Rollen am Gruppe, unten) |
+| `admin:matrix` | Technik | Portal `/sync-admin/` (Chat-Räume) |
+| `admin:zammad` | Technik | Zammad Agent + Queue Users |
+| `zammad:support` | Technik | Zammad Agent + Queue Support |
+| `zammad:hr` | Technik | Zammad Agent + Queue HR |
+| `zammad:admin` | Technik | Zammad Admin + Agent + alle drei Queues |
 
-Bei 180 Zweigvereinen: 180 `verein:*` plus Status-, Funktions- und Schulungsset, nicht 180×Rollen. `verein:*` später aus dem CAV-Mandantenstamm, nicht alle per Hand. `schulung:*` nur der CAV nach Kursabschluss. Schema: Planung `docs/sso-matrix.md` und `docs/schulungen.md`.
+`verein:*` später aus dem CAV, nicht 180-mal per Hand.
 
-**Nur lokal:** eine Testgruppe `verein:demo`. Bereits angelegte `verein:demo:mitglied` / `verein:demo:vorstand` bzw. `amt:*` durch `verein:demo` plus `rolle:*` ersetzen.
+### Rechte an die Gruppe hängen (nicht an einzelne User)
+
+**`admin:keycloak`:** Groups → `admin:keycloak` → **Role mapping** → Assign role → Filter **clients** → Client `realm-management`:
+
+`view-users`, `query-users`, `manage-users`, `query-groups`, `view-realm`, `view-clients`, `query-clients`, `query-realms`, `view-identity-providers`
+
+Ohne `view-clients` / `query-clients` bleibt die Konsole leer, auch wenn der User in der Gruppe ist. URL: `/admin/aeneas/console/`.
+
+**Zammad:** kein Mapping in der Keycloak-UI. Overlay `zammad/initializers/aeneas_oidc_agent.rb` liest `groups` beim OIDC-Login und setzt Rollen/Queues. Queues müssen in Zammad existieren (Abschnitt 8).
+
+**Matrix:** `matrix/groups.yml` + Worker. UI nur `admin:matrix`.
+
+**Portal-Kacheln:** Cloud bei `backoffice` oder `rolle:*`. Chat-Räume bei `admin:matrix`.
 
 ---
 
-## 4. Erster User im Realm `aeneas`
+## 4. Erster Operator im Realm `aeneas`
 
-Nicht im Realm `master`. Realm-Auswahl: **aeneas**.
+Nicht in `master`.
 
-1. **Users** → **Create new user**.
-2. Username und E-Mail.
-3. **Create**.
-4. **Credentials:** Passwort setzen; **Temporary** aus, wenn kein Zwangswechsel beim ersten Login gewünscht ist.
-5. **Groups:** genau eine `mitgliedschaft:*` (`pending` / `aktiv` / `beendet`) plus genau eine `verein:<slug>`-Gruppe. Vorstand zusätzlich `rolle:vorstand`.
+1. Users → Create: Username, E-Mail, Create.
+2. Credentials: Passwort; Temporary aus, wenn kein Zwangswechsel.
+3. Groups mindestens: `mitgliedschaft:aktiv`, eine `verein:*`, `schulung:chat` (Chat testen), plus die `admin:*` / `zammad:*`, die der Operator braucht.
 
-Das Konto ist ein Realm-User, kein Master-Admin. Realm-Verwaltung bleibt beim Master-Admin.
-
-**Nur lokal:** z. B. User `anna`, **Email verified**, Gruppen `mitgliedschaft:aktiv` und `verein:demo`.
+**Nur lokal:** User `anna`, Email verified, `mitgliedschaft:aktiv` + `verein:demo`.
 
 ---
 
-## 5. Portal-OIDC
+## 5. Mail
 
-Voraussetzung: Client `portal` im Realm `aeneas`, Redirect `http://www.<DOMAIN>/auth/callback`, Group-Membership-Mapper Claim `groups` (Full group path aus). Secret in `.env` als `PORTAL_OIDC_CLIENT_SECRET`.
+Ohne SMTP keine Passwort-Mails (Aufnahme) und kein Forgot-Password. [MAIL.md](MAIL.md) bis Keycloak **Test connection** grün. Forgot password erst danach an.
 
-```bash
-docker compose -f compose.yml -f compose.apps.yml up -d --build
-```
+`execute-actions-email` nur mit Action-Liste (`UPDATE_PASSWORD`). `client_id` + `redirect_uri` an den Keycloak-26-Admin-Endpunkt nicht mitsenden (Internal Server Error).
 
-Browser: `http://www.aeneas.test` → **Anmelden** → User aus Realm `aeneas` (nicht Master-Admin). Nach Login müssen die Keycloak-Gruppen unter der Einstiegsseite stehen.
+---
 
-Token-Exchange geht intern an `http://keycloak:8080`, der Browser nur an `id.<DOMAIN>`.
+## 6. OIDC-Clients (Realm `aeneas`)
 
-## 6. Zammad
+Überall denselben **Group Membership**-Mapper: Claim `groups`, Full group path **aus**, ID-Token + Access-Token + Userinfo an.
 
-Eigenes Overlay, offizielle Images. Eigenes Postgres (Rolle `zammad` ≠ Superuser); nicht die Infra-Variable `POSTGRES_USER`.
+### `portal` — confidential
 
-**Nur lokal:** `help.aeneas.test` in die Hosts-Datei (siehe Abschnitt 0). Elasticsearch braucht `vm.max_map_count=262144` (Docker Desktop: in der Linux-VM / WSL).
+Client authentication **On**, Standard flow, PKCE **S256**.
 
-```bash
-docker compose -f compose.yml -f compose.zammad.yml up -d
-```
-
-Erststart dauert mehrere Minuten (Images, `zammad-init`, Rails-Healthcheck). Danach `http://help.aeneas.test` — Setup-Wizard, **lokaler Zammad-Admin** (nicht der Keycloak-Master-Admin).
-
-OIDC nach dem Wizard. Zammad holt die Discovery-URL vom Issuer; der Rails-Container löst `id.<DOMAIN>` über `extra_hosts`/`host-gateway` auf.
-
-Offizielle Zammad-Doku verlangt HTTPS zwischen Zammad und dem OP. **Nur lokal:** HTTP testen. Produktion nur mit TLS.
-
-### Keycloak-Client `zammad` (Realm `aeneas`)
-
-1. **Clients** → **Create client**, OpenID Connect, Client ID `zammad`.
-2. **Client authentication:** Off (public Client).
-3. Nur **Standard flow**.
-4. Login settings:
-
-| Feld | Wert (lokal) |
+| Feld | Produktion |
 | --- | --- |
-| Valid redirect URIs | `http://help.aeneas.test/auth/openid_connect/callback` |
-| Valid post logout redirect URIs | `http://help.aeneas.test/*` |
+| Valid redirect URIs | `https://portal.<DOMAIN>/auth/callback` und `https://www.<DOMAIN>/auth/callback` |
+| Valid post logout redirect URIs | `https://portal.<DOMAIN>/*` |
 | Web origins | `+` |
 
-5. **Advanced:** PKCE code challenge method **S256**.
-6. Dedicated Mapper **Group Membership**, Claim `groups`, Full group path aus; ID token, access token, userinfo an. Introspection aus.
-7. Backchannel-Logout lokal weglassen (Keycloak erreicht `help.aeneas.test` sonst nicht). Produktion: `https://help.<DOMAIN>/auth/openid_connect/backchannel_logout`.
+Secret → `.env` `PORTAL_OIDC_CLIENT_SECRET`. `PORTAL_PUBLIC_URL` muss zur Login-URL passen (Demo: `https://portal.<DOMAIN>`).
 
-### Zammad (als Zammad-Admin)
+### `zammad` — public
 
-**Admin → Settings → Security → Third-party Applications → Authentication via OpenID Connect**
+Client authentication **Off**, Standard flow, PKCE **S256**.
 
-| Feld | Wert (lokal) |
+| Feld | Produktion |
+| --- | --- |
+| Valid redirect URIs | `https://help.<DOMAIN>/auth/openid_connect/callback` |
+| Valid post logout redirect URIs | `https://help.<DOMAIN>/*` |
+| Backchannel logout | `https://help.<DOMAIN>/auth/openid_connect/backchannel_logout` |
+
+### `matrix` — confidential
+
+Synapse-OIDC. Redirect: `https://chat.<DOMAIN>/_synapse/client/oidc/callback`. Secret in `homeserver.yaml` (nicht Git). Siehe [matrix.md](matrix.md).
+
+### `matrix-sync` — confidential, Service account
+
+Service accounts **On**. Service-Account-Rollen (`realm-management`): `view-users`, `query-groups`, `view-realm`, **`manage-users`**.
+
+Derselbe Client legt nach Zammad-Freigabe Keycloak-User an. Ohne `manage-users` schlägt Aufnahme-Hook und Sync-UI fehl.
+
+Secret → `.env` `KEYCLOAK_SYNC_CLIENT_SECRET`.
+
+---
+
+## 7. Portal
+
+```bash
+docker compose -f compose.yml -f compose.tls.yml -f compose.apps.yml up -d --build
+```
+
+Browser: `https://portal.<DOMAIN>` → Anmelden → User aus Realm `aeneas`. Gruppen müssen auf der Startseite stehen.
+
+Token-Exchange intern `http://keycloak:8080`, Browser nur `id.<DOMAIN>`.
+
+Nach Änderungen an `requirements.txt` (z. B. `python-multipart` für `POST /aufnahme`) Image neu bauen, nicht nur Container neu starten.
+
+Aufnahme-Env (Abschnitt 8 füllt die Werte): `ZAMMAD_API_TOKEN`, `ZAMMAD_WEBHOOK_TOKEN`, `ZAMMAD_TICKET_GROUP`, `ZAMMAD_TICKET_CUSTOMER`, plus `KEYCLOAK_SYNC_CLIENT_*`.
+
+---
+
+## 8. Zammad
+
+Eigenes Overlay, eigene Postgres-Instanz. Rolle `zammad` ≠ Superuser; Infra-`POSTGRES_USER` nicht verwenden.
+
+```bash
+docker compose -f compose.yml -f compose.tls.yml -f compose.apps.yml -f compose.zammad.yml up -d
+```
+
+Erststart mehrere Minuten. Dann `https://help.<DOMAIN>` — Setup-Wizard, **lokaler Insel-Admin** (nicht Keycloak).
+
+### OIDC in Zammad
+
+**Admin → Settings → Security → Third-party Applications → OpenID Connect**
+
+| Feld | Produktion |
 | --- | --- |
 | Display name | Keycloak |
 | Identifier | `zammad` |
-| Issuer | `http://id.aeneas.test/realms/aeneas` |
+| Issuer | `https://id.<DOMAIN>/realms/aeneas` |
 
-`KC_HOSTNAME` muss dieselbe Schema-URL sein (`http://id.aeneas.test`). Ohne `http://` liefert die Discovery `https://…:443` — lokal Connection refused.
+`KC_HOSTNAME` = dieselbe URL. Automatic account link: yes. Password Login / User creation aus; Mitglieder nur OpenID. Insel-Admin: Link „Request the password login here“.
 
-Zammad selbst defaultet OIDC-Discovery trotzdem auf HTTPS (`SWD.url_builder = URI::HTTPS`). Overlay mountet `zammad/initializers/swd_http_oidc.rb`, solange `ZAMMAD_HTTP_TYPE=http`. Ohne den Initializer: `Connection refused … port 443` nach dem OIDC-Klick.
+**Nur lokal:** Issuer `http://id.aeneas.test/realms/aeneas`. Initializer `swd_http_oidc.rb` nur bei `ZAMMAD_HTTP_TYPE=http`.
 
-Speichern. **Automatic account link on initial logon:** yes (sonst zweites Konto neben dem Zammad-Admin).
+### Queues
 
-Mitglieder-Login: **Settings → Security → Base** — Password Login aus, Lost Password aus, User creation / „Als neuer Kunde registrieren“ aus. Dann nur noch der OpenID-Button. Zammad hat **keinen** Auto-Redirect auf OIDC (POST/CSRF). Nach Portal-SSO ist Keycloak schon eingeloggt — ein Klick auf den Button, kein Passwort.
+In Zammad anlegen (UI): **Users** (Default), **Support**, **HR**. Der OIDC-Initializer mappt darauf. Ohne Queue kein Agent-Zugriff auf die Tickets.
 
-Zammad-Admin (Inselkonto): Password Login aus blendet das Formular. Auf der Login-Seite Link **Request the password login here** / Einmal-Login als Admin. Nicht denselben User wie Keycloak `anna` verwenden.
+### Funktionsuser Helpdesk
 
-Test mit `anna` (Realm `aeneas`). Zammad legt den User als **Kunde** an. Agenten später per Zammad-Rolle.
+Ticket-API nicht mit dem persönlichen Konto. User **Helpdesk** (Mail z. B. `help@<DOMAIN>`), Rolle Agent, Queue Users voll. API-Token **portal-tickets** mit `ticket.agent` (Token-`preferences.permission` darf nicht leer sein). Token → `.env` `ZAMMAD_API_TOKEN`. `ZAMMAD_TICKET_CUSTOMER` = dieselbe Helpdesk-Mail (sonst bekommt der Antragsteller Auto-Mails; Ersteller des Tickets wäre sonst der Token-Besitzer).
 
-SMTP/IMAP: [MAIL.md](MAIL.md). Overlay-Dateien (noch nicht starten): [frappe.md](frappe.md), [matrix.md](matrix.md), [nextcloud.md](nextcloud.md).
+Portal neu starten, nachdem `.env` steht.
 
-## 7. Nächste Schritte (Produktion)
+### Ticket-Felder (Aufnahme)
 
-CAV-OIDC analog. Frappe Learning (nicht Moodle), Matrix, Nextcloud; Themes, MFA, Offsite-Backup. Aufnahmeformular im Portal; Chat erst nach `schulung:chat`.
+**Admin → Objects → Ticket:**
+
+| Name (intern) | Typ | Werte |
+| --- | --- | --- |
+| `aufnahme_verein` | Select | `demo`, `wanne-eickel`, `worms` (gleiche Slugs wie Keycloak `verein:*`) |
+| `aufnahme_ok` | Boolean | Anzeige z. B. „Konto anlegen?“ |
+
+Ohne beide Felder setzt der Hook nur eine interne Notiz, keinen User.
+
+### Webhook + Trigger + Makro
+
+Zammad hat keinen Ja/Nein-Dialog auf Makros. Speichern = **Aktualisieren**.
+
+1. Webhook: POST `http://portal:8000/hooks/zammad-aufnahme?token=<ZAMMAD_WEBHOOK_TOKEN>` (Docker-DNS `portal`, Token lang und zufällig, derselbe Wert in `.env`).
+2. Trigger „Aufnahme Freigabe → Portal“:
+   - Activator: Action (Ticket-Update)
+   - **Execution: always**, nicht selective — sonst ignoriert Zammad den Tag, den nur das Makro setzt
+   - Bedingung: Tags enthalten `freigabe`
+   - Aktion: Webhook
+3. Makro „Aufnahme freigeben“: Tag `freigabe` setzen.
+
+Amt: Verein wählen, „Konto anlegen“ an, Makro oder Tag, dann **Aktualisieren**. Titel muss `Aufnahme:` enthalten (so legt das Portal das Ticket an).
+
+Fehler: interne Notiz im Ticket („Kein Keycloak-User…“). Logs: `docker compose logs portal`.
+
+---
+
+## 9. Matrix
+
+OIDC von Anfang an, keine offene Registration, kein Auto-Join. Mitglieder kommen nur über Keycloak + Worker in Räume. 1:1 Sprache/Video = TURN (coturn), nicht Jitsi.
+
+Kompletter Klick- und Dateiweg: [matrix.md](matrix.md).
+
+Kurz: `generate` → `homeserver.yaml` (OIDC, `turn_uris`, Federation aus) → Client `matrix` + User `matrix-sync` → Aliase der Default-Räume → `groups.yml` → Compose inkl. coturn → Firewall TURN → Element hart neu laden.
+
+---
+
+## 10. Check
+
+- [ ] `https://id.<DOMAIN>/admin/aeneas/console/` mit User in `admin:keycloak`
+- [ ] Portal-Login, Gruppen sichtbar
+- [ ] `/aufnahme` erzeugt Ticket als Helpdesk in Queue Users
+- [ ] Freigabe mit Verein + Haken + Aktualisieren → Keycloak-User + Passwort-Mail
+- [ ] Zammad-Login: `zammad:admin` sieht Admin + Queues, ohne Gruppe nur Kunde
+- [ ] Element-Login per Keycloak, Räume erst mit `mitgliedschaft:aktiv` (+ Mapping in `groups.yml`)
+- [ ] 1:1-Anruf: Telefon-Symbol, kein zweites Login
+- [ ] Keine Secrets in Git
+
+Als Nächstes: [frappe.md](frappe.md), [nextcloud.md](nextcloud.md), CAV-Fachkern.
+
 ---
 
 ## Reset
 
-Der Bootstrap-Admin wird nur bei leerer Keycloak-Datenbank erzeugt. Ein Container-Restart reicht nicht.
+Bootstrap-Admin nur bei leerer Keycloak-Datenbank. Container-Restart reicht nicht.
 
-**Produktion:** Keycloak-Datenbank nicht droppen, um einen Admin wiederherzustellen. Stattdessen: Postgres-Backup, zweiten Master-Admin vorab anlegen, oder Keycloak-Admin-CLI gegen die bestehende Datenbank. `docker compose down -v` auf dem Produktivsystem löscht Volumes.
+**Produktion:** Keycloak-DB nicht droppen. Backup, zweiten Master-Admin, oder Admin-CLI. `docker compose down -v` löscht Volumes.
 
-**Nur lokal:** Keycloak-Datenbank neu anlegen (Datenbanken `portal` und `cav` bleiben):
+**Nur lokal:**
 
 ```bash
 cd aeneas_infra
@@ -242,6 +348,6 @@ docker compose exec -T postgres psql -U aeneas -d postgres -c "CREATE DATABASE k
 docker compose start keycloak
 ```
 
-Logzeile `Created temporary admin user with username admin` abwarten. `/admin/` → Bootstrap-Login → dauerhaften Master-Admin anlegen.
+Logzeile `Created temporary admin user` → `/admin/` → dauerhaften Master-Admin.
 
-Vollständiger lokaler Reset (alle Volumes): `docker compose down -v`, danach `docker compose up -d`.
+Alles lokal: `docker compose down -v`, dann `up -d`.

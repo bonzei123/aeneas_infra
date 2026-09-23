@@ -1,0 +1,19 @@
+# coturn. Nicht committen: matrix/turnserver.conf (aus dieser Datei erzeugen).
+# Platzhalter ersetzen: __TURN_SHARED_SECRET__, __PUBLIC_IPV4__, __CHAT_HOST__.
+listening-port=3478
+fingerprint
+lt-cred-mech
+use-auth-secret
+static-auth-secret=__TURN_SHARED_SECRET__
+realm=__CHAT_HOST__
+server-name=__CHAT_HOST__
+listening-ip=0.0.0.0
+external-ip=__PUBLIC_IPV4__
+min-port=49160
+max-port=49200
+no-multicast-peers
+no-cli
+no-tls
+no-dtls
+no-rfc5780
+simple-log

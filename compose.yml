@@ -12,14 +12,16 @@ services:
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=aeneas_default
       - --entrypoints.web.address=:80
+      - --entrypoints.web.forwardedHeaders.trustedIPs=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --api.dashboard=true
     ports:
-      - "80:80"
+      # Lokal: 80:80. Hinter Caddy/Stoat: TRAEFIK_PORTS=127.0.0.1:8080:80
+      - "${TRAEFIK_PORTS:-80:80}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
       - traefik.enable=true
-      - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-aeneas.test}`)
+      - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-aeneas-solutions.de}`)
       - traefik.http.routers.traefik.service=api@internal
     networks:
       - default
@@ -62,7 +64,7 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: ${POSTGRES_USER:-aeneas}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-changeme-postgres}
-      KC_HOSTNAME: ${KC_HOSTNAME:-http://id.aeneas.test}
+      KC_HOSTNAME: ${KC_HOSTNAME:-https://id.aeneas-solutions.de}
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
@@ -70,7 +72,7 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-changeme-keycloak}
     labels:
       - traefik.enable=true
-      - traefik.http.routers.keycloak.rule=Host(`id.${DOMAIN:-aeneas.test}`)
+      - traefik.http.routers.keycloak.rule=Host(`id.${DOMAIN:-aeneas-solutions.de}`)
       - traefik.http.services.keycloak.loadbalancer.server.port=8080
     networks:
       - default

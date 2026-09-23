@@ -5,3 +5,4 @@
 .vscode/
 *.log
 data/
+matrix/turnserver.conf

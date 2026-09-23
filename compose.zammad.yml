@@ -23,20 +23,21 @@ x-shared:
       ELASTICSEARCH_SCHEMA: http
       ELASTICSEARCH_HOST: zammad-elasticsearch
       ELASTICSEARCH_PORT: "9200"
-      NGINX_SERVER_NAME: help.${DOMAIN:-aeneas.test}
-      NGINX_SERVER_SCHEME: http
-      ZAMMAD_HTTP_TYPE: http
-      ZAMMAD_FQDN: help.${DOMAIN:-aeneas.test}
+      NGINX_SERVER_NAME: help.${DOMAIN:-aeneas-solutions.de}
+      NGINX_SERVER_SCHEME: ${PUBLIC_SCHEME:-https}
+      ZAMMAD_HTTP_TYPE: ${PUBLIC_SCHEME:-https}
+      ZAMMAD_FQDN: help.${DOMAIN:-aeneas-solutions.de}
       RAILS_TRUSTED_PROXIES: '["127.0.0.1", "::1", "10.0.0.0/8", "172.16.0.0/12"]'
       BACKUP_DIR: /var/tmp/zammad
       BACKUP_ON_START: "false"
     extra_hosts:
-      - "id.${DOMAIN:-aeneas.test}:host-gateway"
+      - "id.${DOMAIN:-aeneas-solutions.de}:host-gateway"
     volumes:
       - zammad_backup:/var/tmp/zammad:ro
       - zammad_storage:/opt/zammad/storage
       # Lokal: SWD defaultet Discovery auf HTTPS:443. Nur wirksam bei ZAMMAD_HTTP_TYPE=http.
       - ./zammad/initializers/swd_http_oidc.rb:/opt/zammad/config/initializers/swd_http_oidc.rb:ro
+      - ./zammad/initializers/aeneas_oidc_agent.rb:/opt/zammad/config/initializers/aeneas_oidc_agent.rb:ro
     depends_on:
       zammad-memcached:
         condition: service_healthy
@@ -98,7 +99,12 @@ services:
         condition: service_healthy
     labels:
       - traefik.enable=true
-      - traefik.http.routers.zammad.rule=Host(`help.${DOMAIN:-aeneas.test}`)
+      - traefik.http.routers.zammad.rule=Host(`help.${DOMAIN:-aeneas-solutions.de}`)
+      - traefik.http.routers.zammad.entrypoints=websecure
+      - traefik.http.routers.zammad.tls.certresolver=le
+      - traefik.http.routers.zammad.middlewares=zammad-https
+      - traefik.http.middlewares.zammad-https.headers.customrequestheaders.X-Forwarded-Proto=https
+      - traefik.http.middlewares.zammad-https.headers.customrequestheaders.X-Forwarded-Ssl=on
       - traefik.http.services.zammad.loadbalancer.server.port=8080
     networks:
       - default

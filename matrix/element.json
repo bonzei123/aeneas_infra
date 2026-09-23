@@ -3,9 +3,28 @@
     "m.homeserver": {
       "base_url": "https://chat.aeneas-solutions.de",
       "server_name": "chat.aeneas-solutions.de"
+    },
+    "io.element.e2ee": {
+      "default": false,
+      "force_disable": true
     }
   },
   "brand": "Aeneas",
   "disable_custom_urls": true,
-  "disable_guests": true
+  "disable_guests": true,
+  "disable_3pid_login": true,
+  "disable_login_language_selector": true,
+  "force_verification": false,
+  "default_country_code": "DE",
+  "sso_redirect_options": {
+    "immediate": true
+  },
+  "features": {
+    "feature_group_calls": false
+  },
+  "setting_defaults": {
+    "language": "de",
+    "UIFeature.voip": true,
+    "UIFeature.advancedEncryption": false
+  }
 }

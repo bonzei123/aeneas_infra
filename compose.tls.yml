@@ -1,0 +1,45 @@
+# Produktion: Traefik auf 80/443, Let’s Encrypt HTTP-01.
+# Lokal weglassen (kein ACME, nur Port 80).
+#
+# docker compose -f compose.yml -f compose.tls.yml \
+#   -f compose.apps.yml -f compose.zammad.yml -f compose.matrix.yml up -d
+#
+# TRAEFIK_PORTS nicht setzen. ACME_EMAIL in .env Pflicht.
+
+services:
+  traefik:
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=aeneas_default
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.forwardedHeaders.trustedIPs=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --api.dashboard=true
+    ports:
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-aeneas-solutions.de}`)
+      - traefik.http.routers.traefik.service=api@internal
+      - traefik.http.routers.traefik.entrypoints=websecure
+      - traefik.http.routers.traefik.tls.certresolver=le
+
+  keycloak:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.keycloak.rule=Host(`id.${DOMAIN:-aeneas-solutions.de}`)
+      - traefik.http.routers.keycloak.entrypoints=websecure
+      - traefik.http.routers.keycloak.tls.certresolver=le
+      - traefik.http.services.keycloak.loadbalancer.server.port=8080
+
+volumes:
+  traefik_letsencrypt:

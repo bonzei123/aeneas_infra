@@ -1,0 +1,6 @@
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.sync.txt .
+RUN pip install --no-cache-dir -r requirements.sync.txt
+COPY sync.py admin.py .
+CMD ["python", "-u", "/app/sync.py"]

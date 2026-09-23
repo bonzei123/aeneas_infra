@@ -1,0 +1,25 @@
+# Gate: ohne diese Gruppe kein verwalteter Raum.
+# extra in dieser Datei: fest verdrahtete Räume (Aeneas-Defaults).
+#
+# Worker liest Attribut matrix. UI: /sync-admin/ (matrix/admin.py)
+
+gate:
+  - mitgliedschaft:aktiv
+
+rooms:
+  aeneas:
+    - schulung:chat
+  allgemein:
+    - schulung:chat
+  hilfe:
+    - schulung:chat
+  vorstand:
+    - rolle:vorstand
+    - backoffice
+  vorstands-chat:
+    - rolle:vorstand
+    - backoffice
+  demo-verein:
+    - verein:demo
+  demo-chat:
+    - verein:demo
